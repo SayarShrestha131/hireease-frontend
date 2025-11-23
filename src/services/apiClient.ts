@@ -32,6 +32,9 @@ const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
+      // Log the request for debugging
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+      
       // Retrieve token from AsyncStorage
       const token = await AsyncStorage.getItem(TOKEN_KEY);
       
@@ -46,6 +49,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('[API Request Error]', error);
     return Promise.reject(error);
   }
 );
@@ -56,10 +60,26 @@ apiClient.interceptors.request.use(
  */
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
-    // Pass through successful responses
+    // Log successful responses
+    console.log(`[API Response] ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
     return response;
   },
   async (error: AxiosError) => {
+    // Log error details for debugging
+    if (error.response) {
+      console.error(`[API Error] ${error.response.status} ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
+      console.error('[API Error Data]', error.response.data);
+    } else if (error.request) {
+      console.error('[API Network Error] No response received');
+      console.error('[API Request Details]', {
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        method: error.config?.method,
+      });
+    } else {
+      console.error('[API Error]', error.message);
+    }
+    
     // Check if error is a 401 Unauthorized response
     if (error.response && error.response.status === 401) {
       try {

@@ -23,9 +23,13 @@ import { validateEmail } from '../utils/validation';
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
+  onNavigateToForgotPassword: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ 
+  onNavigateToRegister,
+  onNavigateToForgotPassword 
+}) => {
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -207,6 +211,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }
             ) : (
               <Text className="text-white text-base font-semibold">Login</Text>
             )}
+          </TouchableOpacity>
+
+          {/* Forgot Password Link */}
+          <TouchableOpacity 
+            onPress={onNavigateToForgotPassword}
+            disabled={loading}
+            className="mt-4"
+          >
+            <Text className="text-[#0096c7] text-sm text-center">
+              Forgot Password?
+            </Text>
           </TouchableOpacity>
 
           {/* Register Link */}

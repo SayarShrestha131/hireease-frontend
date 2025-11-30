@@ -91,20 +91,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null);
 
       // Make POST request to register endpoint
-      const response = await apiClient.post<AuthResponse>('/auth/register', {
+      const response = await apiClient.post('/auth/register', {
         email,
         password,
       });
 
-      // Extract user and token from response
-      const { user: userData, token } = response.data.data;
-
-      // Store token and user data in AsyncStorage
-      await AsyncStorage.setItem(TOKEN_KEY, token);
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
-
-      // Update state
-      setUser(userData);
+      // Registration successful - user needs to verify email
+      // Don't store token or set user yet
       setError(null);
 
       return { success: true };
@@ -121,12 +114,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Login an existing user
    * @param email - User's email address
    * @param password - User's password
-   * @returns Promise with success status and optional error message
+   * @returns Promise with success status, optional error message, and needsVerification flag
    */
   const login = async (
     email: string,
     password: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
     try {
       setLoading(true);
       setError(null);
@@ -150,6 +143,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       return { success: true };
     } catch (err) {
+      // Check if error is due to unverified email
+      if (err instanceof AxiosError && err.response?.status === 403) {
+        const errorMessage = err.response.data.error || 'Please verify your email before logging in';
+        setError(errorMessage);
+        return { success: false, error: errorMessage, needsVerification: true };
+      }
+
       const errorMessage = handleAuthError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };

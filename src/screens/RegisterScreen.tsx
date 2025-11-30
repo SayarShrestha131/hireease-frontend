@@ -23,9 +23,13 @@ import { validateEmail, validatePassword } from '../utils/validation';
 
 interface RegisterScreenProps {
   onNavigateToLogin: () => void;
+  onNavigateToEmailVerification: (email: string) => void;
 }
 
-export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogin }) => {
+export const RegisterScreen: React.FC<RegisterScreenProps> = ({ 
+  onNavigateToLogin,
+  onNavigateToEmailVerification 
+}) => {
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -110,8 +114,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigateToLogi
     // Call register method from auth context
     const result = await register(email, password);
 
-    // Register method handles navigation through context state change
-    // No need to manually navigate here
+    // If registration successful, navigate to email verification
+    if (result) {
+      onNavigateToEmailVerification(email);
+    }
   };
 
   return (

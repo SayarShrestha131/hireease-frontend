@@ -1,0 +1,674 @@
+/**
+ * Profile Screen
+ * 
+ * Comprehensive user profile management with tabs for different sections
+ */
+
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  ScrollView,
+  TextInput,
+  Alert,
+  ActivityIndicator
+} from 'react-native';
+import { 
+  User as UserIcon, 
+  Mail, 
+  Calendar,
+  Edit3,
+  Save,
+  X,
+  Shield,
+  Phone,
+  MapPin,
+  Bell,
+  FileText,
+  Clock,
+  UserPlus,
+  Trash2
+} from 'lucide-react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { Booking, EmergencyContact } from '../types/auth';
+import apiClient from '../services/apiClient';
+
+interface ProfileScreenProps {
+  onNavigateBack: () => void;
+}
+
+type TabType = 'profile' | 'contact' | 'emergency' | 'preferences' | 'bookings' | 'documents';
+
+/**
+ * ProfileScreen Component
+ */
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) => {
+  const { user, logout, refreshUser } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetchingProfile, setFetchingProfile] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Profile fields
+  const [username, setUsername] = useState(user?.username || '');
+  const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '');
+
+  // Contact fields
+  const [phone, setPhone] = useState(user?.contactInfo?.phone || '');
+  const [address, setAddress] = useState(user?.contactInfo?.address || '');
+  const [city, setCity] = useState(user?.contactInfo?.city || '');
+  const [country, setCountry] = useState(user?.contactInfo?.country || '');
+  const [postalCode, setPostalCode] = useState(user?.contactInfo?.postalCode || '');
+
+  // Notification preferences
+  const [emailNotif, setEmailNotif] = useState(user?.notificationPreferences?.email ?? true);
+  const [smsNotif, setSmsNotif] = useState(user?.notificationPreferences?.sms ?? false);
+  const [pushNotif, setPushNotif] = useState(user?.notificationPreferences?.push ?? true);
+  const [bookingUpdates, setBookingUpdates] = useState(user?.notificationPreferences?.bookingUpdates ?? true);
+  const [promotions, setPromotions] = useState(user?.notificationPreferences?.promotions ?? false);
+  const [reminders, setReminders] = useState(user?.notificationPreferences?.reminders ?? true);
+
+  // Bookings
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+
+  // Emergency contacts
+  const [newEmergencyContact, setNewEmergencyContact] = useState({ name: '', relationship: '', phone: '' });
+
+  /**
+   * Fetch profile data on mount
+   */
+  React.useEffect(() => {
+    fetchProfileData();
+  }, []);
+
+  /**
+   * Update form fields when user data changes
+   */
+  React.useEffect(() => {
+    if (user) {
+      setUsername(user.username || '');
+      setDateOfBirth(user.dateOfBirth || '');
+      setPhone(user.contactInfo?.phone || '');
+      setAddress(user.contactInfo?.address || '');
+      setCity(user.contactInfo?.city || '');
+      setCountry(user.contactInfo?.country || '');
+      setPostalCode(user.contactInfo?.postalCode || '');
+      setEmailNotif(user.notificationPreferences?.email ?? true);
+      setSmsNotif(user.notificationPreferences?.sms ?? false);
+      setPushNotif(user.notificationPreferences?.push ?? true);
+      setBookingUpdates(user.notificationPreferences?.bookingUpdates ?? true);
+      setPromotions(user.notificationPreferences?.promotions ?? false);
+      setReminders(user.notificationPreferences?.reminders ?? true);
+    }
+  }, [user]);
+
+  /**
+   * Fetch bookings when bookings tab is active
+   */
+  React.useEffect(() => {
+    if (activeTab === 'bookings' && bookings.length === 0) {
+      fetchBookings();
+    }
+  }, [activeTab]);
+
+  const fetchProfileData = async () => {
+    try {
+      setFetchingProfile(true);
+      await refreshUser();
+    } catch (err: any) {
+      console.error('Error fetching profile:', err);
+      if (err.response?.status === 401) {
+        console.log('Token expired or invalid - showing cached data');
+      }
+    } finally {
+      setFetchingProfile(false);
+    }
+  };
+
+  const fetchBookings = async () => {
+    try {
+      setLoadingBookings(true);
+      const response = await apiClient.get<{ success: boolean; data: { bookings: Booking[] } }>('/profile/bookings');
+      setBookings(response.data.data.bookings);
+    } catch (err) {
+      console.error('Error fetching bookings:', err);
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const updateData: any = {};
+
+      if (activeTab === 'profile') {
+        if (username && username.length < 2) {
+          setError('Username must be at least 2 characters');
+          return;
+        }
+        updateData.username = username;
+        updateData.dateOfBirth = dateOfBirth;
+      }
+
+      if (activeTab === 'contact') {
+        updateData.contactInfo = { phone, address, city, country, postalCode };
+      }
+
+      if (activeTab === 'preferences') {
+        updateData.notificationPreferences = {
+          email: emailNotif,
+          sms: smsNotif,
+          push: pushNotif,
+          bookingUpdates,
+          promotions,
+          reminders,
+        };
+      }
+
+      await apiClient.put('/profile', updateData);
+      await refreshUser();
+
+      Alert.alert('Success', 'Profile updated successfully');
+      setIsEditing(false);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'Failed to update profile';
+      setError(errorMessage);
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddEmergencyContact = async () => {
+    if (!newEmergencyContact.name || !newEmergencyContact.relationship || !newEmergencyContact.phone) {
+      Alert.alert('Error', 'Please fill all emergency contact fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await apiClient.post('/profile/emergency-contacts', newEmergencyContact);
+      await refreshUser();
+      setNewEmergencyContact({ name: '', relationship: '', phone: '' });
+      Alert.alert('Success', 'Emergency contact added');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to add emergency contact');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveEmergencyContact = async (index: number) => {
+    try {
+      setLoading(true);
+      await apiClient.delete(`/profile/emergency-contacts/${index}`);
+      await refreshUser();
+      Alert.alert('Success', 'Emergency contact removed');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to remove emergency contact');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (user) {
+      setUsername(user.username || '');
+      setDateOfBirth(user.dateOfBirth || '');
+      setPhone(user.contactInfo?.phone || '');
+      setAddress(user.contactInfo?.address || '');
+      setCity(user.contactInfo?.city || '');
+      setCountry(user.contactInfo?.country || '');
+      setPostalCode(user.contactInfo?.postalCode || '');
+    }
+    setError(null);
+    setIsEditing(false);
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'text-green-600';
+      case 'active': return 'text-blue-600';
+      case 'completed': return 'text-gray-600';
+      case 'cancelled': return 'text-red-600';
+      default: return 'text-yellow-600';
+    }
+  };
+
+  const renderTabButton = (tab: TabType, icon: any, label: string) => (
+    <TouchableOpacity
+      onPress={() => {
+        setActiveTab(tab);
+        setIsEditing(false);
+      }}
+      className={`flex-1 py-3 items-center border-b-2 ${
+        activeTab === tab ? 'border-[#0096c7]' : 'border-gray-200'
+      }`}
+    >
+      {React.createElement(icon, {
+        size: 20,
+        color: activeTab === tab ? '#0096c7' : '#9CA3AF',
+      })}
+      <Text className={`text-xs mt-1 ${activeTab === tab ? 'text-[#0096c7] font-semibold' : 'text-gray-500'}`}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderProfileTab = () => (
+    <View>
+      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">
+        <Text className="text-lg font-bold text-gray-800 mb-4">Personal Information</Text>
+
+        {/* Email (Read-only) */}
+        <View className="mb-4 pb-4 border-b border-gray-200">
+          <View className="flex-row items-center mb-2">
+            <Mail size={16} color="#6B7280" />
+            <Text className="text-sm font-semibold text-gray-600 ml-2">Email</Text>
+          </View>
+          <Text className="text-base text-gray-800 ml-6">{user?.email}</Text>
+        </View>
+
+        {/* Username */}
+        <View className="mb-4">
+          <View className="flex-row items-center mb-2">
+            <UserIcon size={16} color="#6B7280" />
+            <Text className="text-sm font-semibold text-gray-600 ml-2">Username</Text>
+          </View>
+          {isEditing ? (
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="Enter username"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800 ml-6">{user?.username || 'Not set'}</Text>
+          )}
+        </View>
+
+        {/* Date of Birth */}
+        <View className="mb-4">
+          <View className="flex-row items-center mb-2">
+            <Calendar size={16} color="#6B7280" />
+            <Text className="text-sm font-semibold text-gray-600 ml-2">Date of Birth</Text>
+          </View>
+          {isEditing ? (
+            <TextInput
+              value={dateOfBirth}
+              onChangeText={setDateOfBirth}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="YYYY-MM-DD"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800 ml-6">
+              {user?.dateOfBirth ? formatDate(user.dateOfBirth) : 'Not set'}
+            </Text>
+          )}
+        </View>
+
+        {/* Member Since */}
+        <View>
+          <Text className="text-sm font-semibold text-gray-600 mb-2">Member Since</Text>
+          <Text className="text-base text-gray-800">{formatDate(user?.createdAt)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderContactTab = () => (
+    <View>
+      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">
+        <Text className="text-lg font-bold text-gray-800 mb-4">Contact Information</Text>
+
+        {/* Phone */}
+        <View className="mb-4">
+          <Text className="text-sm font-semibold text-gray-600 mb-2">Phone</Text>
+          {isEditing ? (
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="Enter phone number"
+              keyboardType="phone-pad"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800">{phone || 'Not set'}</Text>
+          )}
+        </View>
+
+        {/* Address */}
+        <View className="mb-4">
+          <Text className="text-sm font-semibold text-gray-600 mb-2">Address</Text>
+          {isEditing ? (
+            <TextInput
+              value={address}
+              onChangeText={setAddress}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="Enter address"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800">{address || 'Not set'}</Text>
+          )}
+        </View>
+
+        {/* City */}
+        <View className="mb-4">
+          <Text className="text-sm font-semibold text-gray-600 mb-2">City</Text>
+          {isEditing ? (
+            <TextInput
+              value={city}
+              onChangeText={setCity}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="Enter city"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800">{city || 'Not set'}</Text>
+          )}
+        </View>
+
+        {/* Country */}
+        <View className="mb-4">
+          <Text className="text-sm font-semibold text-gray-600 mb-2">Country</Text>
+          {isEditing ? (
+            <TextInput
+              value={country}
+              onChangeText={setCountry}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="Enter country"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800">{country || 'Not set'}</Text>
+          )}
+        </View>
+
+        {/* Postal Code */}
+        <View>
+          <Text className="text-sm font-semibold text-gray-600 mb-2">Postal Code</Text>
+          {isEditing ? (
+            <TextInput
+              value={postalCode}
+              onChangeText={setPostalCode}
+              className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800"
+              placeholder="Enter postal code"
+              editable={!loading}
+            />
+          ) : (
+            <Text className="text-base text-gray-800">{postalCode || 'Not set'}</Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderEmergencyTab = () => (
+    <View>
+      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">
+        <Text className="text-lg font-bold text-gray-800 mb-4">Emergency Contacts</Text>
+
+        {/* Existing Contacts */}
+        {user?.emergencyContacts && user.emergencyContacts.length > 0 ? (
+          user.emergencyContacts.map((contact, index) => (
+            <View key={index} className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <View className="flex-row justify-between items-start">
+                <View className="flex-1">
+                  <Text className="text-base font-semibold text-gray-800">{contact.name}</Text>
+                  <Text className="text-sm text-gray-600 mt-1">{contact.relationship}</Text>
+                  <Text className="text-sm text-gray-600 mt-1">{contact.phone}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRemoveEmergencyContact(index)}
+                  className="bg-red-100 p-2 rounded-lg"
+                >
+                  <Trash2 size={16} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text className="text-gray-500 text-center py-4">No emergency contacts added</Text>
+        )}
+
+        {/* Add New Contact */}
+        <View className="mt-4 pt-4 border-t border-gray-200">
+          <Text className="text-base font-semibold text-gray-800 mb-3">Add New Contact</Text>
+          
+          <TextInput
+            value={newEmergencyContact.name}
+            onChangeText={(text) => setNewEmergencyContact({ ...newEmergencyContact, name: text })}
+            className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800 mb-3"
+            placeholder="Name"
+          />
+          
+          <TextInput
+            value={newEmergencyContact.relationship}
+            onChangeText={(text) => setNewEmergencyContact({ ...newEmergencyContact, relationship: text })}
+            className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800 mb-3"
+            placeholder="Relationship"
+          />
+          
+          <TextInput
+            value={newEmergencyContact.phone}
+            onChangeText={(text) => setNewEmergencyContact({ ...newEmergencyContact, phone: text })}
+            className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-800 mb-3"
+            placeholder="Phone"
+            keyboardType="phone-pad"
+          />
+          
+          <TouchableOpacity
+            onPress={handleAddEmergencyContact}
+            disabled={loading}
+            className="bg-[#0096c7] rounded-lg py-3 flex-row items-center justify-center"
+          >
+            <UserPlus size={20} color="#FFFFFF" />
+            <Text className="text-white font-semibold ml-2">Add Contact</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderPreferencesTab = () => (
+    <View>
+      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">
+        <Text className="text-lg font-bold text-gray-800 mb-4">Notification Preferences</Text>
+
+        {/* Toggle switches */}
+        {[
+          { label: 'Email Notifications', value: emailNotif, setter: setEmailNotif },
+          { label: 'SMS Notifications', value: smsNotif, setter: setSmsNotif },
+          { label: 'Push Notifications', value: pushNotif, setter: setPushNotif },
+          { label: 'Booking Updates', value: bookingUpdates, setter: setBookingUpdates },
+          { label: 'Promotions', value: promotions, setter: setPromotions },
+          { label: 'Reminders', value: reminders, setter: setReminders },
+        ].map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            onPress={() => isEditing && item.setter(!item.value)}
+            disabled={!isEditing}
+            className="flex-row justify-between items-center py-4 border-b border-gray-200"
+          >
+            <Text className="text-base text-gray-800">{item.label}</Text>
+            <View className={`w-12 h-6 rounded-full ${item.value ? 'bg-[#0096c7]' : 'bg-gray-300'}`}>
+              <View className={`w-5 h-5 rounded-full bg-white mt-0.5 ${item.value ? 'ml-6' : 'ml-0.5'}`} />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderBookingsTab = () => (
+    <View>
+      {loadingBookings ? (
+        <View className="py-8">
+          <ActivityIndicator size="large" color="#0096c7" />
+        </View>
+      ) : bookings.length > 0 ? (
+        bookings.map((booking) => (
+          <View key={booking._id} className="bg-white rounded-lg p-4 mb-3 shadow-sm">
+            <View className="flex-row justify-between items-start mb-2">
+              <Text className="text-lg font-bold text-gray-800">{booking.vehicleName}</Text>
+              <Text className={`text-sm font-semibold capitalize ${getStatusColor(booking.status)}`}>
+                {booking.status}
+              </Text>
+            </View>
+            <Text className="text-sm text-gray-600 mb-1">
+              {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
+            </Text>
+            <Text className="text-sm text-gray-600 mb-1">
+              Pickup: {booking.pickupLocation}
+            </Text>
+            <Text className="text-base font-semibold text-[#0096c7] mt-2">
+              Rs. {booking.totalPrice.toLocaleString()}
+            </Text>
+          </View>
+        ))
+      ) : (
+        <View className="bg-white rounded-lg p-8 items-center">
+          <Clock size={48} color="#9CA3AF" />
+          <Text className="text-gray-500 mt-4 text-center">No bookings yet</Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderDocumentsTab = () => (
+    <View>
+      <View className="bg-white rounded-lg p-6 shadow-sm">
+        <Text className="text-lg font-bold text-gray-800 mb-4">Documents</Text>
+        {user?.documents && user.documents.length > 0 ? (
+          user.documents.map((doc, index) => (
+            <View key={index} className="mb-4 p-4 bg-gray-50 rounded-lg flex-row justify-between items-center">
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-800 capitalize">{doc.type}</Text>
+                <Text className="text-sm text-gray-600 mt-1">
+                  Uploaded: {formatDate(doc.uploadedAt)}
+                </Text>
+                <Text className={`text-sm mt-1 ${doc.verified ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {doc.verified ? 'Verified' : 'Pending Verification'}
+                </Text>
+              </View>
+              <FileText size={24} color="#0096c7" />
+            </View>
+          ))
+        ) : (
+          <View className="py-8 items-center">
+            <FileText size={48} color="#9CA3AF" />
+            <Text className="text-gray-500 mt-4 text-center">No documents uploaded</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      {fetchingProfile ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#0096c7" />
+          <Text className="text-gray-600 mt-4">Loading profile...</Text>
+        </View>
+      ) : (
+        <>
+          {/* Header */}
+          <View className="bg-white px-6 pt-6 pb-4 border-b border-gray-200">
+            <TouchableOpacity onPress={onNavigateBack} className="mb-3 mt-4">
+              <Text className="text-[#0096c7] text-base">← Back</Text>
+            </TouchableOpacity>
+            <View className="flex-row justify-between items-center">
+              <Text className="text-2xl font-bold text-gray-800">My Profile</Text>
+              {(activeTab === 'profile' || activeTab === 'contact' || activeTab === 'preferences') && !isEditing && (
+                <TouchableOpacity
+                  onPress={() => setIsEditing(true)}
+                  className="bg-[#0096c7] rounded-full p-2"
+                >
+                  <Edit3 size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Tabs */}
+          <View className="bg-white flex-row">
+            {renderTabButton('profile', UserIcon, 'Profile')}
+            {renderTabButton('contact', Phone, 'Contact')}
+            {renderTabButton('emergency', Shield, 'Emergency')}
+            {renderTabButton('preferences', Bell, 'Preferences')}
+            {renderTabButton('bookings', Clock, 'Bookings')}
+            {renderTabButton('documents', FileText, 'Documents')}
+          </View>
+
+          <ScrollView className="flex-1 px-6 py-6">
+            {activeTab === 'profile' && renderProfileTab()}
+            {activeTab === 'contact' && renderContactTab()}
+            {activeTab === 'emergency' && renderEmergencyTab()}
+            {activeTab === 'preferences' && renderPreferencesTab()}
+            {activeTab === 'bookings' && renderBookingsTab()}
+            {activeTab === 'documents' && renderDocumentsTab()}
+
+            {/* Error Message */}
+            {error && (
+              <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <Text className="text-red-700 text-sm">{error}</Text>
+              </View>
+            )}
+
+            {/* Edit Actions */}
+            {isEditing && (activeTab === 'profile' || activeTab === 'contact' || activeTab === 'preferences') && (
+              <View className="flex-row space-x-3 mb-6">
+                <TouchableOpacity
+                  onPress={handleCancelEdit}
+                  disabled={loading}
+                  className="flex-1 bg-gray-200 rounded-lg py-4 flex-row items-center justify-center mr-2"
+                >
+                  <X size={20} color="#374151" />
+                  <Text className="text-gray-800 text-base font-semibold ml-2">Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleUpdateProfile}
+                  disabled={loading}
+                  className={`flex-1 bg-[#0096c7] rounded-lg py-4 flex-row items-center justify-center ml-2 ${
+                    loading ? 'opacity-50' : ''
+                  }`}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Save size={20} color="#FFFFFF" />
+                      <Text className="text-white text-base font-semibold ml-2">Save</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        </>
+      )}
+    </SafeAreaView>
+  );
+};

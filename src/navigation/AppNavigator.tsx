@@ -17,13 +17,15 @@ import { VerifyCodeScreen } from '../screens/VerifyCodeScreen';
 import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
 import { ChangePasswordScreen } from '../screens/ChangePasswordScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
 import HomeScreen from '../screens/HomeScreen';
+import { BottomTabNavigator } from './BottomTabNavigator';
 
 /**
  * Screen types for navigation state
  */
 type AuthScreen = 'login' | 'register' | 'email-verification' | 'forgot-password' | 'verify-code' | 'reset-password';
-type MainScreen = 'home' | 'settings' | 'change-password';
+type MainScreen = 'home' | 'settings' | 'change-password' | 'profile';
 
 /**
  * AppNavigator Component
@@ -105,6 +107,13 @@ export const AppNavigator: React.FC = () => {
   };
 
   /**
+   * Navigate to Profile screen
+   */
+  const navigateToProfile = () => {
+    setMainScreen('profile');
+  };
+
+  /**
    * Navigate to Home screen
    */
   const navigateToHome = () => {
@@ -118,21 +127,7 @@ export const AppNavigator: React.FC = () => {
 
   // Show authenticated area when user is logged in
   if (isAuthenticated) {
-    // Toggle between Home, Settings, and Change Password screens
-    if (mainScreen === 'settings') {
-      return (
-        <SettingsScreen 
-          onNavigateToChangePassword={navigateToChangePassword}
-          onNavigateBack={navigateToHome}
-        />
-      );
-    }
-
-    if (mainScreen === 'change-password') {
-      return <ChangePasswordScreen onNavigateBack={navigateToSettings} />;
-    }
-    
-    return <HomeScreen onNavigateToSettings={navigateToSettings} />;
+    return <BottomTabNavigator />;
   }
 
   // Show authentication screens when user is not logged in

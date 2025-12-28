@@ -187,6 +187,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
+   * Refresh user data from the server
+   * Fetches the latest user profile and updates local state
+   */
+  const refreshUser = async (): Promise<void> => {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!token) {
+        return;
+      }
+
+      // Fetch current user profile from API
+      const response = await apiClient.get<{ success: boolean; data: { user: User } }>('/profile');
+      const userData = response.data.data.user;
+
+      // Update AsyncStorage and state
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+      setUser(userData);
+    } catch (err: any) {
+      console.error('Error refreshing user data:', err);
+      // If 401, token is invalid - logout user
+      if (err.response?.status === 401) {
+        console.log('Token invalid - logging out');
+        await logout();
+      }
+      // Don't throw error, just log it
+    }
+  };
+
+  /**
    * Handle authentication errors and return user-friendly messages
    * @param err - Error object from axios request
    * @returns User-friendly error message
@@ -239,6 +268,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     clearError,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

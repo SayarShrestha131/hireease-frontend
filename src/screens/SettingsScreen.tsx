@@ -1,34 +1,69 @@
 /**
  * Settings Screen
  * 
- * User settings and account management screen
+ * User settings and account management screen with enhanced options
  */
 
-import React from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
-import { User as UserIcon, Lock, LogOut, ChevronRight } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  ScrollView,
+  Switch,
+  Alert
+} from 'react-native';
+import { 
+  User as UserIcon, 
+  Lock, 
+  LogOut, 
+  ChevronRight,
+  Bell,
+  Shield,
+  HelpCircle,
+  FileText,
+  Server
+} from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../services/apiClient';
 
 interface SettingsScreenProps {
   onNavigateToChangePassword: () => void;
+  onNavigateToProfile: () => void;
+  onNavigateToApiConfig: () => void;
   onNavigateBack: () => void;
 }
 
 /**
  * SettingsScreen Component
- * Displays user information and account settings
+ * Displays user information and comprehensive account settings
  */
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ 
   onNavigateToChangePassword,
+  onNavigateToProfile,
+  onNavigateToApiConfig,
   onNavigateBack 
 }) => {
   const { user, logout, loading } = useAuth();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   /**
    * Handle logout button press
    */
   const handleLogout = async () => {
-    await logout();
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          style: 'destructive',
+          onPress: async () => await logout()
+        }
+      ]
+    );
   };
 
   return (
@@ -44,8 +79,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         <View className="px-6 py-6">
           {/* User Profile Card */}
-          <View className="bg-white rounded-lg p-6 mb-6 shadow-sm">
-            <View className="flex-row items-center mb-4">
+          <TouchableOpacity
+            onPress={onNavigateToProfile}
+            className="bg-white rounded-lg p-6 mb-6 shadow-sm"
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center">
               <View className="bg-[#0096c7] rounded-full p-4 mr-4">
                 <UserIcon size={32} color="#FFFFFF" />
               </View>
@@ -56,46 +95,55 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text className="text-lg font-semibold text-gray-800">
                   {user?.email}
                 </Text>
+                <View className="flex-row items-center mt-2">
+                  <Shield size={12} color={user?.isEmailVerified ? '#10B981' : '#F59E0B'} />
+                  <Text className={`text-xs ml-1 ${user?.isEmailVerified ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {user?.isEmailVerified ? 'Verified' : 'Unverified'}
+                  </Text>
+                </View>
               </View>
+              <ChevronRight size={20} color="#9CA3AF" />
             </View>
-
-            {/* Account Details */}
-            <View className="border-t border-gray-200 pt-4">
-              <View className="mb-3">
-                <Text className="text-xs text-gray-500 mb-1">User ID</Text>
-                <Text className="text-sm text-gray-700 font-mono">
-                  {user?._id}
-                </Text>
-              </View>
-              <View>
-                <Text className="text-xs text-gray-500 mb-1">Member Since</Text>
-                <Text className="text-sm text-gray-700">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  }) : 'N/A'}
-                </Text>
-              </View>
-            </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Account Settings Section */}
           <View className="mb-6">
             <Text className="text-sm font-semibold text-gray-600 mb-3 px-2">
-              ACCOUNT SETTINGS
+              ACCOUNT
             </Text>
             
-            {/* Change Password */}
+            {/* View Profile */}
             <TouchableOpacity
-              onPress={onNavigateToChangePassword}
-              disabled={loading}
+              onPress={onNavigateToProfile}
               className="bg-white rounded-lg p-4 flex-row items-center justify-between mb-2 shadow-sm"
               activeOpacity={0.7}
             >
               <View className="flex-row items-center flex-1">
-                <View className="bg-gray-100 rounded-full p-2 mr-3">
-                  <Lock size={20} color="#0096c7" />
+                <View className="bg-blue-100 rounded-full p-2 mr-3">
+                  <UserIcon size={20} color="#0096c7" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-gray-800">
+                    My Profile
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    View and edit your profile
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            {/* Change Password */}
+            <TouchableOpacity
+              onPress={onNavigateToChangePassword}
+              disabled={loading}
+              className="bg-white rounded-lg p-4 flex-row items-center justify-between shadow-sm"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center flex-1">
+                <View className="bg-purple-100 rounded-full p-2 mr-3">
+                  <Lock size={20} color="#9333EA" />
                 </View>
                 <View className="flex-1">
                   <Text className="text-base font-medium text-gray-800">
@@ -103,6 +151,107 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   </Text>
                   <Text className="text-xs text-gray-500 mt-1">
                     Update your account password
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Preferences Section */}
+          <View className="mb-6">
+            <Text className="text-sm font-semibold text-gray-600 mb-3 px-2">
+              PREFERENCES
+            </Text>
+            
+            {/* Notifications */}
+            <View className="bg-white rounded-lg p-4 flex-row items-center justify-between shadow-sm">
+              <View className="flex-row items-center flex-1">
+                <View className="bg-green-100 rounded-full p-2 mr-3">
+                  <Bell size={20} color="#10B981" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-gray-800">
+                    Notifications
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    Receive booking updates
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={setNotificationsEnabled}
+                trackColor={{ false: '#D1D5DB', true: '#0096c7' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+          </View>
+
+          {/* Support Section */}
+          <View className="mb-6">
+            <Text className="text-sm font-semibold text-gray-600 mb-3 px-2">
+              SUPPORT
+            </Text>
+            
+            {/* API Configuration */}
+            <TouchableOpacity
+              onPress={onNavigateToApiConfig}
+              className="bg-white rounded-lg p-4 flex-row items-center justify-between mb-2 shadow-sm"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center flex-1">
+                <View className="bg-purple-100 rounded-full p-2 mr-3">
+                  <Server size={20} color="#9333EA" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-gray-800">
+                    API Configuration
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    Configure backend connection
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            {/* Help Center */}
+            <TouchableOpacity
+              className="bg-white rounded-lg p-4 flex-row items-center justify-between mb-2 shadow-sm"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center flex-1">
+                <View className="bg-blue-100 rounded-full p-2 mr-3">
+                  <HelpCircle size={20} color="#3B82F6" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-gray-800">
+                    Help Center
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    Get help and support
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            {/* Terms & Privacy */}
+            <TouchableOpacity
+              className="bg-white rounded-lg p-4 flex-row items-center justify-between shadow-sm"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center flex-1">
+                <View className="bg-gray-100 rounded-full p-2 mr-3">
+                  <FileText size={20} color="#6B7280" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-gray-800">
+                    Terms & Privacy
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    Legal information
                   </Text>
                 </View>
               </View>
@@ -124,6 +273,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               {loading ? 'Logging out...' : 'Logout'}
             </Text>
           </TouchableOpacity>
+
+          {/* App Version */}
+          <Text className="text-center text-xs text-gray-400 mt-6">
+            Vehicle Rental App v1.0.0
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

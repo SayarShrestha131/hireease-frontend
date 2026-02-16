@@ -14,14 +14,49 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ChangePasswordScreen } from '../screens/ChangePasswordScreen';
 import { ApiConfigScreen } from '../screens/ApiConfigScreen';
+import { KYCSubmissionScreen } from '../screens/KYCSubmissionScreen';
+import { KYCStatusScreen } from '../screens/KYCStatusScreen';
+import { KYCReviewListScreen } from '../screens/admin/KYCReviewListScreen';
+import { KYCDetailScreen } from '../screens/admin/KYCDetailScreen';
+import { MyBookingsScreen } from '../screens/MyBookingsScreen';
+import BookingDetailScreen from '../screens/BookingDetailScreen';
+import { BookingFormScreen } from '../screens/BookingFormScreen';
+import { BookingConfirmationScreen } from '../screens/BookingConfirmationScreen';
+import { PaymentScreen } from '../screens/PaymentScreen';
+import { BookingSuccessScreen } from '../screens/BookingSuccessScreen';
+import { useAuth } from '../contexts/AuthContext';
+import { Vehicle } from '../types/vehicle';
+import { AddOns, PriceBreakdown, Booking } from '../types/booking';
 
 type TabScreen = 'dashboard' | 'vehicles' | 'bookings' | 'profile';
-type SettingsScreenType = 'settings' | 'change-password' | 'api-config';
+type SettingsScreenType = 'settings' | 'change-password' | 'api-config' | 'kyc-status' | 'kyc-submission';
+type AdminScreenType = 'kyc-review-list' | 'kyc-detail';
 
 export const BottomTabNavigator: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabScreen>('dashboard');
   const [settingsScreen, setSettingsScreen] = useState<SettingsScreenType>('settings');
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdminScreen, setShowAdminScreen] = useState(false);
+  const [showBookingDetail, setShowBookingDetail] = useState(false);
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [showBookingSuccess, setShowBookingSuccess] = useState(false);
+  const [adminScreen, setAdminScreen] = useState<AdminScreenType>('kyc-review-list');
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [currentBooking, setCurrentBooking] = useState<Booking | null>(null);
+  const [bookingFormData, setBookingFormData] = useState<{
+    vehicle: Vehicle;
+    pickupDate: Date;
+    pickupTime: string;
+    dropoffDate: Date;
+    dropoffTime: string;
+    addOns: AddOns;
+    priceBreakdown: PriceBreakdown;
+  } | null>(null);
 
   const navigateToSettings = () => {
     setShowSettings(true);
@@ -36,18 +71,218 @@ export const BottomTabNavigator: React.FC = () => {
     setSettingsScreen('api-config');
   };
 
+  const navigateToKYCStatus = () => {
+    setShowSettings(true);
+    setSettingsScreen('kyc-status');
+  };
+
+  const navigateToKYCSubmission = () => {
+    setShowSettings(true);
+    setSettingsScreen('kyc-submission');
+  };
+
+  const navigateToKYCReviewList = () => {
+    setShowAdminScreen(true);
+    setAdminScreen('kyc-review-list');
+  };
+
+  const navigateToKYCDetail = (submissionId: string) => {
+    setShowAdminScreen(true);
+    setAdminScreen('kyc-detail');
+    setSelectedSubmissionId(submissionId);
+  };
+
   const navigateToProfile = () => {
     setActiveTab('profile');
     setShowSettings(false);
   };
 
+  const navigateToBookingDetail = (bookingId: string) => {
+    setSelectedBookingId(bookingId);
+    setShowBookingDetail(true);
+  };
+
+  const navigateBackFromBookingDetail = () => {
+    setShowBookingDetail(false);
+    setSelectedBookingId(null);
+  };
+
+  const navigateToBookingForm = (vehicle: Vehicle) => {
+    setSelectedVehicle(vehicle);
+    setShowBookingForm(true);
+  };
+
+  const navigateBackFromBookingForm = () => {
+    setShowBookingForm(false);
+    setSelectedVehicle(null);
+  };
+
+  const navigateToBookingConfirmation = (data: {
+    vehicle: Vehicle;
+    pickupDate: Date;
+    pickupTime: string;
+    dropoffDate: Date;
+    dropoffTime: string;
+    addOns: AddOns;
+    priceBreakdown: PriceBreakdown;
+  }) => {
+    setBookingFormData(data);
+    setShowBookingForm(false);
+    setShowBookingConfirmation(true);
+  };
+
+  const navigateBackFromBookingConfirmation = () => {
+    setShowBookingConfirmation(false);
+    setShowBookingForm(true);
+  };
+
+  const navigateToPayment = (booking: Booking) => {
+    setCurrentBooking(booking);
+    setShowBookingConfirmation(false);
+    setShowPayment(true);
+  };
+
+  const navigateBackFromPayment = () => {
+    setShowPayment(false);
+    setShowBookingConfirmation(true);
+  };
+
+  const navigateToBookingSuccess = (booking: Booking) => {
+    setCurrentBooking(booking);
+    setShowPayment(false);
+    setShowBookingSuccess(true);
+  };
+
+  const navigateFromSuccessToBookingDetail = (bookingId: string) => {
+    setShowBookingSuccess(false);
+    setSelectedBookingId(bookingId);
+    setShowBookingDetail(true);
+  };
+
+  const navigateFromSuccessToBookingsList = () => {
+    setShowBookingSuccess(false);
+    setCurrentBooking(null);
+    setBookingFormData(null);
+    setSelectedVehicle(null);
+    setActiveTab('bookings');
+  };
+
+  const navigateFromSuccessToHome = () => {
+    setShowBookingSuccess(false);
+    setCurrentBooking(null);
+    setBookingFormData(null);
+    setSelectedVehicle(null);
+    setActiveTab('vehicles');
+  };
+
   const navigateBack = () => {
-    if (settingsScreen === 'change-password') {
+    if (settingsScreen === 'change-password' || settingsScreen === 'kyc-submission') {
+      setSettingsScreen('settings');
+    } else if (settingsScreen === 'kyc-status') {
       setSettingsScreen('settings');
     } else {
       setShowSettings(false);
     }
   };
+
+  const navigateBackFromAdmin = () => {
+    if (adminScreen === 'kyc-detail') {
+      setAdminScreen('kyc-review-list');
+    } else {
+      setShowAdminScreen(false);
+      setActiveTab('dashboard');
+    }
+  };
+
+  // Show booking detail screen
+  if (showBookingDetail && selectedBookingId) {
+    return (
+      <BookingDetailScreen
+        bookingId={selectedBookingId}
+        onNavigateBack={navigateBackFromBookingDetail}
+      />
+    );
+  }
+
+  // Show booking form screen
+  if (showBookingForm && selectedVehicle) {
+    return (
+      <BookingFormScreen
+        route={{
+          params: {
+            vehicleId: selectedVehicle._id,
+            vehicle: selectedVehicle,
+          },
+        }}
+        onNavigateToConfirmation={navigateToBookingConfirmation}
+        onNavigateBack={navigateBackFromBookingForm}
+      />
+    );
+  }
+
+  // Show booking confirmation screen
+  if (showBookingConfirmation && bookingFormData) {
+    return (
+      <BookingConfirmationScreen
+        route={{
+          params: bookingFormData,
+        }}
+        onNavigateToPayment={navigateToPayment}
+        onNavigateBack={navigateBackFromBookingConfirmation}
+      />
+    );
+  }
+
+  // Show payment screen
+  if (showPayment && currentBooking) {
+    return (
+      <PaymentScreen
+        route={{
+          params: {
+            booking: currentBooking,
+          },
+        }}
+        onNavigateToSuccess={navigateToBookingSuccess}
+        onNavigateBack={navigateBackFromPayment}
+      />
+    );
+  }
+
+  // Show booking success screen
+  if (showBookingSuccess && currentBooking) {
+    return (
+      <BookingSuccessScreen
+        route={{
+          params: {
+            booking: currentBooking,
+          },
+        }}
+        onNavigateToBookingDetails={navigateFromSuccessToBookingDetail}
+        onNavigateToBookingsList={navigateFromSuccessToBookingsList}
+        onNavigateToHome={navigateFromSuccessToHome}
+      />
+    );
+  }
+
+  // Show admin screens
+  if (showAdminScreen && user?.role === 'admin') {
+    if (adminScreen === 'kyc-detail' && selectedSubmissionId) {
+      return (
+        <KYCDetailScreen
+          submissionId={selectedSubmissionId}
+          onNavigateBack={navigateBackFromAdmin}
+        />
+      );
+    }
+    if (adminScreen === 'kyc-review-list') {
+      return (
+        <KYCReviewListScreen
+          onNavigateToDetail={navigateToKYCDetail}
+          onNavigateBack={navigateBackFromAdmin}
+        />
+      );
+    }
+  }
 
   // Show settings screens
   if (showSettings) {
@@ -57,11 +292,28 @@ export const BottomTabNavigator: React.FC = () => {
     if (settingsScreen === 'api-config') {
       return <ApiConfigScreen onNavigateBack={navigateBack} />;
     }
+    if (settingsScreen === 'kyc-status') {
+      return (
+        <KYCStatusScreen
+          onNavigateToSubmission={navigateToKYCSubmission}
+          onNavigateBack={navigateBack}
+        />
+      );
+    }
+    if (settingsScreen === 'kyc-submission') {
+      return (
+        <KYCSubmissionScreen
+          onNavigateToStatus={navigateToKYCStatus}
+          onNavigateBack={navigateBack}
+        />
+      );
+    }
     return (
       <SettingsScreen
         onNavigateToChangePassword={navigateToChangePassword}
         onNavigateToProfile={navigateToProfile}
         onNavigateToApiConfig={navigateToApiConfig}
+        onNavigateToKYCStatus={navigateToKYCStatus}
         onNavigateBack={navigateBack}
       />
     );
@@ -113,9 +365,19 @@ export const BottomTabNavigator: React.FC = () => {
   return (
     <View className="flex-1">
       {/* Screen Content */}
-      {activeTab === 'dashboard' && <DashboardScreen />}
-      {activeTab === 'vehicles' && <HomeScreen onNavigateToSettings={navigateToSettings} />}
-      {activeTab === 'bookings' && <BookingsPlaceholder />}
+      {activeTab === 'dashboard' && <DashboardScreen onNavigateToKYCReview={navigateToKYCReviewList} />}
+      {activeTab === 'vehicles' && (
+        <HomeScreen 
+          onNavigateToSettings={navigateToSettings}
+          onNavigateToBookingForm={navigateToBookingForm}
+        />
+      )}
+      {activeTab === 'bookings' && (
+        <MyBookingsScreen 
+          onNavigateToDetail={navigateToBookingDetail}
+          onNavigateToVehicles={() => setActiveTab('vehicles')}
+        />
+      )}
 
       {/* Bottom Tab Bar */}
       {renderBottomTabs()}
@@ -144,23 +406,5 @@ const TabButton: React.FC<TabButtonProps> = ({ icon: Icon, label, active, onPres
         {label}
       </Text>
     </TouchableOpacity>
-  );
-};
-
-// Placeholder for Bookings screen
-const BookingsPlaceholder: React.FC = () => {
-  return (
-    <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
-      <View className="flex-1 items-center justify-center px-6">
-        <Calendar size={64} color="#9CA3AF" />
-        <Text className="text-xl font-bold text-gray-800 mt-4">My Bookings</Text>
-        <Text className="text-gray-500 text-center mt-2">
-          Your vehicle bookings will appear here
-        </Text>
-        <TouchableOpacity className="bg-[#0096c7] px-6 py-3 rounded-lg mt-6">
-          <Text className="text-white font-semibold">Browse Vehicles</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
   );
 };

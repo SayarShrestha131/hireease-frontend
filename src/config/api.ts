@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Network from 'expo-network';
 
 interface ApiConfig {
   baseURL: string;
@@ -8,11 +9,12 @@ interface ApiConfig {
 }
 
 const API_URL_KEY = 'custom_api_url';
+const LAST_WORKING_URL_KEY = 'last_working_api_url';
 
 /**
  * Get custom API URL from storage
  */
-const getCustomApiUrl = async (): Promise<string | null> => {
+export const getCustomApiUrl = async (): Promise<string | null> => {
   try {
     return await AsyncStorage.getItem(API_URL_KEY);
   } catch (error) {
@@ -46,6 +48,50 @@ export const clearCustomApiUrl = async (): Promise<void> => {
 };
 
 /**
+ * Save last working URL
+ */
+export const saveLastWorkingUrl = async (url: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(LAST_WORKING_URL_KEY, url);
+  } catch (error) {
+    console.error('Error saving last working URL:', error);
+  }
+};
+
+/**
+ * Get last working URL
+ */
+export const getLastWorkingUrl = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(LAST_WORKING_URL_KEY);
+  } catch (error) {
+    console.error('Error reading last working URL:', error);
+    return null;
+  }
+};
+
+/**
+ * Test if a URL is reachable
+ */
+export const testConnection = async (url: string): Promise<boolean> => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(`${url}/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch (error) {
+    console.log(`[API Config] Connection test failed for ${url}:`, error);
+    return false;
+  }
+};
+
+/**
  * Get the appropriate API base URL based on the platform and environment
  */
 const getBaseURL = (): string => {
@@ -54,12 +100,24 @@ const getBaseURL = (): string => {
     return 'https://api.production.com/api';
   }
 
-  // HARDCODED FIX: Use your actual network IP
-  // This works for both emulator and physical devices on the same network
-  const NETWORK_IP = '192.168.254.23';
+  // RECOMMENDED: Use ngrok for reliable connection on any network
+  // 1. Install ngrok: https://ngrok.com/download
+  // 2. Run: ngrok http 5000
+  // 3. Copy the https URL and paste it below
+  // Example: 'https://1a2b-3c4d-5e6f.ngrok-free.app/api'
+  const NGROK_URL = 'https://nonmental-nonprepositionally-dani.ngrok-free.dev/api'; // Paste your ngrok URL here (works on ANY network)
   
+  if (NGROK_URL) {
+    console.log('[API Config] 🌍 Using ngrok URL (works on any network)');
+    console.log('[API Config] 🔗 URL:', NGROK_URL);
+    return NGROK_URL;
+  }
+
+  // Fallback: Use local network IP (only works on same WiFi)
+  const NETWORK_IP = '10.218.131.72';
   console.log('[API Config] 🌐 Using network IP:', NETWORK_IP);
-  console.log('[API Config] ✅ This works on all devices and networks');
+  console.log('[API Config] ⚠️  Both devices must be on same WiFi');
+  console.log('[API Config] 💡 For mobile data/hotspot, use ngrok instead');
   
   return `http://${NETWORK_IP}:5000/api`;
 };
@@ -89,6 +147,69 @@ export const updateApiBaseUrl = (newUrl: string): void => {
  */
 export const getCurrentApiUrl = (): string => {
   return config.baseURL;
+};
+
+/**
+ * Auto-detect and set the best API URL
+ */
+export const autoDetectApiUrl = async (): Promise<string> => {
+  console.log('[API Config] 🔍 Auto-detecting best API URL...');
+  
+  // Try custom URL first
+  const customUrl = await getCustomApiUrl();
+  if (customUrl) {
+    console.log('[API Config] Testing custom URL:', customUrl);
+    if (await testConnection(customUrl)) {
+      updateApiBaseUrl(customUrl);
+      await saveLastWorkingUrl(customUrl);
+      console.log('[API Config] ✅ Using custom URL');
+      return customUrl;
+    }
+  }
+  
+  // Try last working URL
+  const lastWorkingUrl = await getLastWorkingUrl();
+  if (lastWorkingUrl && lastWorkingUrl !== customUrl) {
+    console.log('[API Config] Testing last working URL:', lastWorkingUrl);
+    if (await testConnection(lastWorkingUrl)) {
+      updateApiBaseUrl(lastWorkingUrl);
+      console.log('[API Config] ✅ Using last working URL');
+      return lastWorkingUrl;
+    }
+  }
+  
+  // Try current configured URL
+  const currentUrl = getCurrentApiUrl();
+  console.log('[API Config] Testing current URL:', currentUrl);
+  if (await testConnection(currentUrl)) {
+    await saveLastWorkingUrl(currentUrl);
+    console.log('[API Config] ✅ Current URL is working');
+    return currentUrl;
+  }
+  
+  console.log('[API Config] ⚠️ No working URL found, using default');
+  return currentUrl;
+};
+
+/**
+ * Get network information
+ */
+export const getNetworkInfo = async () => {
+  try {
+    const networkState = await Network.getNetworkStateAsync();
+    const ipAddress = await Network.getIpAddressAsync();
+    
+    console.log('[API Config] 📱 Network Info:');
+    console.log('  - Type:', networkState.type);
+    console.log('  - Connected:', networkState.isConnected);
+    console.log('  - Internet:', networkState.isInternetReachable);
+    console.log('  - IP Address:', ipAddress);
+    
+    return { networkState, ipAddress };
+  } catch (error) {
+    console.error('[API Config] Error getting network info:', error);
+    return null;
+  }
 };
 
 export default config;

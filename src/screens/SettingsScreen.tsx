@@ -32,6 +32,7 @@ interface SettingsScreenProps {
   onNavigateToChangePassword: () => void;
   onNavigateToProfile: () => void;
   onNavigateToApiConfig: () => void;
+  onNavigateToKYCStatus: () => void;
   onNavigateBack: () => void;
 }
 
@@ -43,6 +44,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigateToChangePassword,
   onNavigateToProfile,
   onNavigateToApiConfig,
+  onNavigateToKYCStatus,
   onNavigateBack 
 }) => {
   const { user, logout, loading } = useAuth();
@@ -138,7 +140,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <TouchableOpacity
               onPress={onNavigateToChangePassword}
               disabled={loading}
-              className="bg-white rounded-lg p-4 flex-row items-center justify-between shadow-sm"
+              className="bg-white rounded-lg p-4 flex-row items-center justify-between mb-2 shadow-sm"
               activeOpacity={0.7}
             >
               <View className="flex-row items-center flex-1">
@@ -151,6 +153,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   </Text>
                   <Text className="text-xs text-gray-500 mt-1">
                     Update your account password
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            {/* KYC Verification */}
+            <TouchableOpacity
+              onPress={onNavigateToKYCStatus}
+              className="bg-white rounded-lg p-4 flex-row items-center justify-between shadow-sm"
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center flex-1">
+                <View className="bg-green-100 rounded-full p-2 mr-3">
+                  <Shield size={20} color="#10B981" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-gray-800">
+                    KYC Verification
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    Verify your identity
                   </Text>
                 </View>
               </View>

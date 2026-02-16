@@ -1,3 +1,4 @@
+
 /**
  * Profile Screen
  * 
@@ -32,8 +33,19 @@ import {
   Trash2
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { Booking, EmergencyContact } from '../types/auth';
+import { EmergencyContact } from '../types/auth';
 import apiClient from '../services/apiClient';
+
+// Temporary Booking interface until it's properly exported
+interface Booking {
+  _id: string;
+  vehicleName: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  pickupLocation: string;
+  totalPrice: number;
+}
 
 interface ProfileScreenProps {
   onNavigateBack: () => void;
@@ -154,7 +166,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
           return;
         }
         updateData.username = username;
-        updateData.dateOfBirth = dateOfBirth;
+        
+        // Format date of birth to YYYY-MM-DD with zero-padding
+        if (dateOfBirth) {
+          const dateRegex = /^\d{4}-\d{1,2}-\d{1,2}$/;
+          if (dateRegex.test(dateOfBirth)) {
+            const [year, month, day] = dateOfBirth.split('-');
+            updateData.dateOfBirth = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          } else {
+            updateData.dateOfBirth = dateOfBirth;
+          }
+        }
       }
 
       if (activeTab === 'contact') {

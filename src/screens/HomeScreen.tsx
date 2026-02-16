@@ -32,13 +32,14 @@ import apiClient from '../services/apiClient';
 
 interface HomeScreenProps {
   onNavigateToSettings: () => void;
+  onNavigateToBookingForm: (vehicle: Vehicle) => void;
 }
 
 /**
  * HomeScreen Component
  * Vehicle catalog with search and filtering capabilities
  */
-const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigateToBookingForm }) => {
   const { user } = useAuth();
 
   // State
@@ -79,7 +80,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings }) => {
       if (filters.available !== undefined) params.append('available', String(filters.available));
 
       const response = await apiClient.get(`/vehicles?${params.toString()}`);
-      setVehicles(response.data.data.vehicles);
+      const vehiclesData = response.data.data.vehicles;
+      console.log('[HomeScreen] Vehicles loaded:', vehiclesData.length);
+      console.log('[HomeScreen] First vehicle price:', vehiclesData[0]?.pricePerDay);
+      setVehicles(vehiclesData);
     } catch (error: any) {
       console.error('Error fetching vehicles:', error);
       
@@ -276,9 +280,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings }) => {
 
               {/* Price and Book Button */}
               <View className="flex-row items-center justify-between pt-3 border-t border-gray-200">
-                <View>
-                  <Text className="text-2xl font-bold text-[#0096c7]">
-                    Rs. {vehicle.pricePerDay.toLocaleString()}
+                <View className="flex-1 mr-3">
+                  <Text className="text-2xl font-bold text-[#0096c7]" numberOfLines={1}>
+                    Rs. {vehicle.pricePerDay?.toLocaleString() || vehicle.pricePerDay || 'N/A'}
                   </Text>
                   <Text className="text-xs text-gray-600">/day</Text>
                 </View>
@@ -287,6 +291,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings }) => {
                     vehicle.availability.isAvailable ? 'bg-[#0096c7]' : 'bg-gray-300'
                   }`}
                   disabled={!vehicle.availability.isAvailable}
+                  onPress={() => vehicle.availability.isAvailable && onNavigateToBookingForm(vehicle)}
                 >
                   <Text className="text-white font-semibold">
                     {vehicle.availability.isAvailable ? 'Book Now' : 'Unavailable'}

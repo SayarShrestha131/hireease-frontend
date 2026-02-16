@@ -48,23 +48,6 @@ export interface UserDocument {
 }
 
 /**
- * Booking interface
- */
-export interface Booking {
-  _id: string;
-  vehicleId: string;
-  vehicleName: string;
-  startDate: string;
-  endDate: string;
-  totalPrice: number;
-  status: 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled';
-  pickupLocation: string;
-  dropoffLocation: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * User interface representing the authenticated user data
  * Matches the backend User model structure (password excluded)
  */

@@ -19,13 +19,18 @@ import {
   Clock,
   MapPin,
   Star,
+  Shield,
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
+
+interface DashboardScreenProps {
+  onNavigateToKYCReview?: () => void;
+}
 
 /**
  * DashboardScreen Component
  */
-const DashboardScreen: React.FC = () => {
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateToKYCReview }) => {
   const { user } = useAuth();
 
   return (
@@ -85,7 +90,7 @@ const DashboardScreen: React.FC = () => {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity className="bg-white rounded-lg p-4 flex-row items-center shadow-sm">
+            <TouchableOpacity className="bg-white rounded-lg p-4 flex-row items-center mb-3 shadow-sm">
               <View className="bg-purple-500 rounded-full p-3 mr-4">
                 <Clock size={24} color="#FFFFFF" />
               </View>
@@ -94,6 +99,22 @@ const DashboardScreen: React.FC = () => {
                 <Text className="text-xs text-gray-500 mt-1">View past rentals</Text>
               </View>
             </TouchableOpacity>
+
+            {/* Admin KYC Review Link */}
+            {user?.role === 'admin' && onNavigateToKYCReview && (
+              <TouchableOpacity 
+                onPress={onNavigateToKYCReview}
+                className="bg-white rounded-lg p-4 flex-row items-center shadow-sm border-2 border-[#0096c7]"
+              >
+                <View className="bg-[#0096c7] rounded-full p-3 mr-4">
+                  <Shield size={24} color="#FFFFFF" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-base font-semibold text-gray-800">KYC Review Panel</Text>
+                  <Text className="text-xs text-gray-500 mt-1">Review user verifications</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Recent Activity */}

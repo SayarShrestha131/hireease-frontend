@@ -8,6 +8,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from '../config/api';
+import { logRequest, logResponse, logError } from '../utils/logger';
 
 /**
  * Storage key for JWT token in AsyncStorage
@@ -31,9 +32,13 @@ const apiClient: AxiosInstance = axios.create({
  */
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // Store start time for duration calculation
+    (config as any).metadata = { startTime: Date.now() };
+    
     try {
-      // Log the request for debugging
-      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+      // Log the request with detailed information
+      const url = `${config.baseURL}${config.url}`;
+      logRequest(config.method || 'GET', url, config.data);
       
       // Retrieve token from AsyncStorage
       const token = await AsyncStorage.getItem(TOKEN_KEY);
@@ -60,25 +65,40 @@ apiClient.interceptors.request.use(
  */
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
-    // Log successful responses
-    console.log(`[API Response] ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    // Calculate request duration
+    const duration = (response.config as any).metadata?.startTime 
+      ? Date.now() - (response.config as any).metadata.startTime 
+      : undefined;
+    
+    // Log successful responses with detailed information
+    const url = `${response.config.baseURL}${response.config.url}`;
+    logResponse(
+      response.config.method || 'GET',
+      url,
+      response.status,
+      response.data,
+      duration
+    );
+    
     return response;
   },
   async (error: AxiosError) => {
-    // Log error details for debugging
-    if (error.response) {
-      console.error(`[API Error] ${error.response.status} ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-      console.error('[API Error Data]', error.response.data);
-    } else if (error.request) {
-      console.error('[API Network Error] No response received');
-      console.error('[API Request Details]', {
-        url: error.config?.url,
-        baseURL: error.config?.baseURL,
-        method: error.config?.method,
-      });
-    } else {
-      console.error('[API Error]', error.message);
-    }
+    // Calculate request duration
+    const duration = (error.config as any)?.metadata?.startTime 
+      ? Date.now() - (error.config as any).metadata.startTime 
+      : undefined;
+    
+    // Log error with detailed information
+    const url = error.config 
+      ? `${error.config.baseURL}${error.config.url}` 
+      : 'Unknown URL';
+    
+    logError(
+      error.config?.method || 'UNKNOWN',
+      url,
+      error,
+      duration
+    );
     
     // Check if error is a 401 Unauthorized response
     if (error.response && error.response.status === 401) {
@@ -88,7 +108,7 @@ apiClient.interceptors.response.use(
         
         // Note: The actual logout logic (clearing user state, navigation) 
         // will be handled by the AuthContext when it detects the 401 error
-        console.log('401 Unauthorized - Token cleared from storage');
+        console.log('🔐 401 Unauthorized - Token cleared from storage');
       } catch (storageError) {
         console.error('Error clearing token from AsyncStorage:', storageError);
       }

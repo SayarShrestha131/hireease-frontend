@@ -32,7 +32,11 @@ type MainScreen = 'home' | 'settings' | 'change-password' | 'profile';
  * Manages navigation between authentication screens and authenticated area
  */
 export const AppNavigator: React.FC = () => {
+  console.log('🟢 [AppNavigator] Component rendering');
+  
   const { isAuthenticated, loading } = useAuth();
+  console.log('🟢 [AppNavigator] isAuthenticated:', isAuthenticated, 'loading:', loading);
+  
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
   const [mainScreen, setMainScreen] = useState<MainScreen>('home');
   const [verificationEmail, setVerificationEmail] = useState<string>('');
@@ -122,13 +126,17 @@ export const AppNavigator: React.FC = () => {
 
   // Show loading screen while checking authentication status
   if (loading) {
+    console.log('🟢 [AppNavigator] Showing loading screen');
     return <LoadingScreen />;
   }
 
   // Show authenticated area when user is logged in
   if (isAuthenticated) {
+    console.log('🟢 [AppNavigator] User authenticated, showing BottomTabNavigator');
     return <BottomTabNavigator />;
   }
+
+  console.log('🟢 [AppNavigator] User not authenticated, showing auth screen:', authScreen);
 
   // Show authentication screens when user is not logged in
   // Toggle between Login, Register, Email Verification, Forgot Password, and Reset Password

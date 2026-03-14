@@ -8,7 +8,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AxiosError } from 'axios';
-import apiClient, { TOKEN_KEY } from '../services/apiClient';
+import apiClient, { TOKEN_KEY, setUnauthorizedCallback } from '../services/apiClient';
 import { User, AuthResponse, ErrorResponse, AuthContextType } from '../types/auth';
 
 /**
@@ -33,6 +33,8 @@ interface AuthProviderProps {
  * Wraps the application and provides authentication state and methods to all child components
  */
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  console.log('🟢 [AuthContext] AuthProvider component rendering');
+  
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,11 +46,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const isAuthenticated = user !== null;
 
   /**
+   * Handle automatic logout when 401 unauthorized error occurs
+   * This is called by the API client interceptor
+   */
+  const handleUnauthorizedLogout = async () => {
+    try {
+      console.log('[AuthContext] 🔐 Handling unauthorized logout...');
+      
+      // Clear token and user data from AsyncStorage
+      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+
+      // Reset state - this will trigger navigation to login screen
+      setUser(null);
+      setError('Your session has expired. Please login again.');
+      
+      console.log('[AuthContext] ✅ User logged out due to expired token');
+    } catch (err) {
+      console.error('[AuthContext] Error during unauthorized logout:', err);
+    }
+  };
+
+  /**
    * Check authentication status on mount
    * Restores user session from AsyncStorage if token exists
    */
   useEffect(() => {
-    checkAuthStatus();
+    console.log('🟢 [AuthContext] useEffect running - checking auth status');
+    
+    try {
+      checkAuthStatus();
+      
+      // Set up the 401 unauthorized callback
+      setUnauthorizedCallback(() => {
+        console.log('[AuthContext] 🔐 Unauthorized callback triggered - logging out user');
+        handleUnauthorizedLogout();
+      });
+    } catch (err) {
+      console.error('🔴 [AuthContext] Error in useEffect:', err);
+    }
   }, []);
 
   /**
@@ -56,23 +91,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    */
   const checkAuthStatus = async () => {
     try {
+      console.log('🟢 [AuthContext] checkAuthStatus started');
       setLoading(true);
       
       // Retrieve token and user data from AsyncStorage
       const token = await AsyncStorage.getItem(TOKEN_KEY);
       const userData = await AsyncStorage.getItem(USER_KEY);
 
+      console.log('🟢 [AuthContext] Token exists:', !!token);
+      console.log('🟢 [AuthContext] User data exists:', !!userData);
+
       if (token && userData) {
         // Parse and restore user data
         const parsedUser: User = JSON.parse(userData);
         setUser(parsedUser);
+        console.log('🟢 [AuthContext] User restored from storage');
+      } else {
+        console.log('🟢 [AuthContext] No stored session found');
       }
     } catch (err) {
-      console.error('Error checking auth status:', err);
+      console.error('🔴 [AuthContext] Error checking auth status:', err);
       // Clear potentially corrupted data
       await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
     } finally {
       setLoading(false);
+      console.log('🟢 [AuthContext] checkAuthStatus completed');
     }
   };
 

@@ -1,122 +1,123 @@
 /**
  * API Client with Axios Interceptors
- * 
- * This module provides a configured Axios instance with request and response interceptors
- * for handling JWT token authentication and automatic logout on 401 errors.
  */
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import config from '../config/api';
-import { logRequest, logResponse, logError } from '../utils/logger';
+import { getCurrentApiUrl } from '../config/api';
 
-/**
- * Storage key for JWT token in AsyncStorage
- */
+console.log('🟢 [apiClient] Module loading...');
+
 const TOKEN_KEY = 'auth_token';
 
 /**
- * Configured Axios instance with interceptors
+ * Callback function to handle 401 errors
  */
-const apiClient: AxiosInstance = axios.create({
-  baseURL: config.baseURL,
-  timeout: config.timeout,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+let onUnauthorizedCallback: (() => void) | null = null;
+
+export const setUnauthorizedCallback = (callback: () => void) => {
+  onUnauthorizedCallback = callback;
+};
 
 /**
- * Request Interceptor
- * Automatically attaches JWT token from AsyncStorage to Authorization header
+ * Deep clone function to prevent frozen object issues
  */
-apiClient.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
-    // Store start time for duration calculation
-    (config as any).metadata = { startTime: Date.now() };
-    
-    try {
-      // Log the request with detailed information
-      const url = `${config.baseURL}${config.url}`;
-      logRequest(config.method || 'GET', url, config.data);
-      
-      // Retrieve token from AsyncStorage
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
-      
-      // If token exists, attach it to the Authorization header
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (error) {
-      console.error('Error retrieving token from AsyncStorage:', error);
-    }
-    
-    return config;
-  },
-  (error) => {
-    console.error('[API Request Error]', error);
-    return Promise.reject(error);
+function deepClone(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
   }
-);
+  
+  if (obj instanceof Date) {
+    return new Date(obj.getTime());
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepClone(item));
+  }
+  
+  const clonedObj: any = {};
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      clonedObj[key] = deepClone(obj[key]);
+    }
+  }
+  
+  return clonedObj;
+}
 
-/**
- * Response Interceptor
- * Handles 401 errors by triggering logout and clearing stored credentials
- */
-apiClient.interceptors.response.use(
-  (response: AxiosResponse) => {
-    // Calculate request duration
-    const duration = (response.config as any).metadata?.startTime 
-      ? Date.now() - (response.config as any).metadata.startTime 
-      : undefined;
+// Lazy initialization
+let apiClient: AxiosInstance | null = null;
+
+const getApiClient = (): AxiosInstance => {
+  if (!apiClient) {
+    const baseURL = getCurrentApiUrl();
+    console.log('🟢 [apiClient] Creating axios instance with baseURL:', baseURL);
     
-    // Log successful responses with detailed information
-    const url = `${response.config.baseURL}${response.config.url}`;
-    logResponse(
-      response.config.method || 'GET',
-      url,
-      response.status,
-      response.data,
-      duration
-    );
+    apiClient = axios.create({
+      baseURL: baseURL,
+      timeout: 15000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
     
-    return response;
-  },
-  async (error: AxiosError) => {
-    // Calculate request duration
-    const duration = (error.config as any)?.metadata?.startTime 
-      ? Date.now() - (error.config as any).metadata.startTime 
-      : undefined;
+    console.log('🟢 [apiClient] Axios instance created');
     
-    // Log error with detailed information
-    const url = error.config 
-      ? `${error.config.baseURL}${error.config.url}` 
-      : 'Unknown URL';
-    
-    logError(
-      error.config?.method || 'UNKNOWN',
-      url,
-      error,
-      duration
-    );
-    
-    // Check if error is a 401 Unauthorized response
-    if (error.response && error.response.status === 401) {
-      try {
-        // Clear stored token from AsyncStorage
-        await AsyncStorage.removeItem(TOKEN_KEY);
+    // Setup request interceptor
+    apiClient.interceptors.request.use(
+      async (config: InternalAxiosRequestConfig) => {
+        (config as any).metadata = { startTime: Date.now() };
         
-        // Note: The actual logout logic (clearing user state, navigation) 
-        // will be handled by the AuthContext when it detects the 401 error
-        console.log('🔐 401 Unauthorized - Token cleared from storage');
-      } catch (storageError) {
-        console.error('Error clearing token from AsyncStorage:', storageError);
+        try {
+          const token = await AsyncStorage.getItem(TOKEN_KEY);
+          if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        } catch (error) {
+          console.error('🔴 [apiClient] Error retrieving token:', error);
+        }
+        
+        return config;
+      },
+      (error) => {
+        console.error('🔴 [apiClient] Request error:', error);
+        return Promise.reject(error);
       }
-    }
+    );
     
-    return Promise.reject(error);
+    // Setup response interceptor
+    apiClient.interceptors.response.use(
+      (response: AxiosResponse) => {
+        try {
+          response.data = deepClone(response.data);
+        } catch (cloneError) {
+          console.warn('🔴 [apiClient] Failed to clone response data:', cloneError);
+        }
+        return response;
+      },
+      async (error: AxiosError) => {
+        if (error.response && error.response.status === 401) {
+          try {
+            await AsyncStorage.removeItem(TOKEN_KEY);
+            await AsyncStorage.removeItem('auth_user');
+            console.log('🔐 [apiClient] 401 - Token cleared');
+            
+            if (onUnauthorizedCallback) {
+              console.log('🔐 [apiClient] Triggering logout...');
+              onUnauthorizedCallback();
+            }
+          } catch (storageError) {
+            console.error('🔴 [apiClient] Error clearing token:', storageError);
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+    
+    console.log('🟢 [apiClient] Interceptors set up');
   }
-);
+  return apiClient;
+};
 
-export default apiClient;
+export default getApiClient();
 export { TOKEN_KEY };

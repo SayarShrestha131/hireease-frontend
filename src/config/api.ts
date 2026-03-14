@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Network from 'expo-network';
 
@@ -92,44 +90,51 @@ export const testConnection = async (url: string): Promise<boolean> => {
 };
 
 /**
- * Get the appropriate API base URL based on the platform and environment
+ * Get the appropriate API base URL
  */
 const getBaseURL = (): string => {
-  if (!__DEV__) {
-    // Production URL
-    return 'https://api.production.com/api';
-  }
+  try {
+    if (typeof __DEV__ !== 'undefined' && !__DEV__) {
+      return 'https://api.production.com/api';
+    }
 
-  // RECOMMENDED: Use ngrok for reliable connection on any network
-  // 1. Install ngrok: https://ngrok.com/download
-  // 2. Run: ngrok http 5000
-  // 3. Copy the https URL and paste it below
-  // Example: 'https://1a2b-3c4d-5e6f.ngrok-free.app/api'
-  const NGROK_URL = "https://nonmental-nonprepositionally-dani.ngrok-free.dev/api"
-  
-  if (NGROK_URL) {
-    console.log('[API Config] 🌍 Using ngrok URL (works on any network)');
-    console.log('[API Config] 🔗 URL:', NGROK_URL);
-    return NGROK_URL;
-  }
+    const NGROK_URL = typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_NGROK_URL 
+      ? `${process.env.EXPO_PUBLIC_NGROK_URL}/api`
+      : null;
+    
+    if (NGROK_URL) {
+      return NGROK_URL;
+    }
 
-  // Fallback: Use local network IP (only works on same WiFi)
-  const NETWORK_IP = '10.218.131.72';
-  console.log('[API Config] 🌐 Using network IP:', NETWORK_IP);
-  console.log('[API Config] ⚠️  Both devices must be on same WiFi');
-  console.log('[API Config] 💡 For mobile data/hotspot, use ngrok instead');
-  
-  return `http://${NETWORK_IP}:5000/api`;
+    const NETWORK_IP = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_NETWORK_IP) || '10.218.131.72';
+    return `http://${NETWORK_IP}:5000/api`;
+  } catch (error) {
+    console.error('[API Config] Error getting base URL:', error);
+    return 'http://10.218.131.72:5000/api';
+  }
 };
 
-let baseURL = getBaseURL();
+// Don't call getBaseURL() at module load - use a default value
+let baseURL = 'http://10.218.131.72:5000/api';
+let isInitialized = false;
 
-// Log the final API base URL
-console.log('[API Config] 🌐 Base URL:', baseURL);
-console.log('[API Config] 💡 Tip: You can change this in Settings if needed');
+// Initialize on first access
+const initializeConfig = () => {
+  if (!isInitialized) {
+    baseURL = getBaseURL();
+    isInitialized = true;
+  }
+};
 
+// Create simple config object with getter
 const config: ApiConfig = {
-  baseURL,
+  get baseURL() {
+    initializeConfig();
+    return baseURL;
+  },
+  set baseURL(value: string) {
+    baseURL = value;
+  },
   timeout: 15000,
 };
 
@@ -138,7 +143,7 @@ const config: ApiConfig = {
  */
 export const updateApiBaseUrl = (newUrl: string): void => {
   baseURL = newUrl;
-  config.baseURL = newUrl;
+  isInitialized = true;
   console.log('[API Config] ✅ API URL updated to:', newUrl);
 };
 
@@ -146,13 +151,17 @@ export const updateApiBaseUrl = (newUrl: string): void => {
  * Get current API base URL
  */
 export const getCurrentApiUrl = (): string => {
-  return config.baseURL;
+  initializeConfig();
+  return baseURL;
 };
 
 /**
- * Export API_BASE_URL for direct access
+ * Export API_BASE_URL getter for direct access
  */
-export const API_BASE_URL = config.baseURL;
+export const getApiBaseUrl = (): string => {
+  initializeConfig();
+  return baseURL;
+};
 
 /**
  * Auto-detect and set the best API URL
@@ -160,7 +169,6 @@ export const API_BASE_URL = config.baseURL;
 export const autoDetectApiUrl = async (): Promise<string> => {
   console.log('[API Config] 🔍 Auto-detecting best API URL...');
   
-  // Try custom URL first
   const customUrl = await getCustomApiUrl();
   if (customUrl) {
     console.log('[API Config] Testing custom URL:', customUrl);
@@ -172,7 +180,6 @@ export const autoDetectApiUrl = async (): Promise<string> => {
     }
   }
   
-  // Try last working URL
   const lastWorkingUrl = await getLastWorkingUrl();
   if (lastWorkingUrl && lastWorkingUrl !== customUrl) {
     console.log('[API Config] Testing last working URL:', lastWorkingUrl);
@@ -183,7 +190,6 @@ export const autoDetectApiUrl = async (): Promise<string> => {
     }
   }
   
-  // Try current configured URL
   const currentUrl = getCurrentApiUrl();
   console.log('[API Config] Testing current URL:', currentUrl);
   if (await testConnection(currentUrl)) {

@@ -105,7 +105,7 @@ const getBaseURL = (): string => {
   // 2. Run: ngrok http 5000
   // 3. Copy the https URL and paste it below
   // Example: 'https://1a2b-3c4d-5e6f.ngrok-free.app/api'
-  const NGROK_URL = 'https://nonmental-nonprepositionally-dani.ngrok-free.dev/api'; // Paste your ngrok URL here (works on ANY network)
+  const NGROK_URL = "https://nonmental-nonprepositionally-dani.ngrok-free.dev/api"
   
   if (NGROK_URL) {
     console.log('[API Config] 🌍 Using ngrok URL (works on any network)');
@@ -148,6 +148,11 @@ export const updateApiBaseUrl = (newUrl: string): void => {
 export const getCurrentApiUrl = (): string => {
   return config.baseURL;
 };
+
+/**
+ * Export API_BASE_URL for direct access
+ */
+export const API_BASE_URL = config.baseURL;
 
 /**
  * Auto-detect and set the best API URL

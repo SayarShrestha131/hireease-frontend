@@ -91,7 +91,7 @@ export interface Booking {
     _id: string;
     name: string;
     brand: string;
-    model: string;
+    vehicleModel: string;
     type: string;
     images: string[];
     pricePerDay: number;

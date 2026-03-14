@@ -2,7 +2,7 @@ export interface Vehicle {
   _id: string;
   name: string;
   brand: string;
-  model: string;
+  vehicleModel: string;
   year: number;
   type: 'sedan' | 'suv' | 'hatchback' | 'truck' | 'van' | 'sports' | 'electric';
   fuelType: 'petrol' | 'diesel' | 'electric' | 'hybrid';

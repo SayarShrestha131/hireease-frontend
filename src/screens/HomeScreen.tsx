@@ -13,6 +13,7 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -29,6 +30,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { Vehicle, VehicleFilters, FilterOptions } from '../types/vehicle';
 import apiClient from '../services/apiClient';
+import { getCurrentApiUrl } from '../config/api';
 
 interface HomeScreenProps {
   onNavigateToSettings: () => void;
@@ -83,6 +85,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
       const vehiclesData = response.data.data.vehicles;
       console.log('[HomeScreen] Vehicles loaded:', vehiclesData.length);
       console.log('[HomeScreen] First vehicle price:', vehiclesData[0]?.pricePerDay);
+      console.log('[HomeScreen] First vehicle images:', vehiclesData[0]?.images);
+      console.log('[HomeScreen] First vehicle full data:', JSON.stringify(vehiclesData[0], null, 2));
       setVehicles(vehiclesData);
     } catch (error: any) {
       console.error('Error fetching vehicles:', error);
@@ -127,6 +131,27 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
 
   const applyFilter = (key: keyof VehicleFilters, value: any) => {
     setFilters({ ...filters, [key]: value });
+  };
+
+  const getVehicleImageUrl = (vehicle: Vehicle) => {
+    if (vehicle.images && vehicle.images.length > 0) {
+      const imageValue = vehicle.images[0];
+      
+      // Check if it's already a full URL (http:// or https://)
+      if (imageValue.startsWith('http://') || imageValue.startsWith('https://')) {
+        console.log('[HomeScreen] Using external URL for', vehicle.name, ':', imageValue);
+        return imageValue;
+      }
+      
+      // Otherwise, construct URL from API base
+      const baseUrl = getCurrentApiUrl();
+      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+      const imageUrl = `${cleanBaseUrl}/vehicles/image/${imageValue}?t=${Date.now()}`;
+      console.log('[HomeScreen] Using API URL for', vehicle.name, ':', imageUrl);
+      return imageUrl;
+    }
+    console.log('[HomeScreen] No images for vehicle:', vehicle.name);
+    return null;
   };
 
   return (
@@ -220,83 +245,112 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
           </View>
         ) : (
           vehicles.map((vehicle) => (
-            <View key={vehicle._id} className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-              {/* Vehicle Header */}
-              <View className="flex-row justify-between items-start mb-3">
-                <View className="flex-1">
-                  <Text className="text-lg font-bold text-gray-800">{vehicle.name}</Text>
-                  <Text className="text-sm text-gray-600 mt-1">
-                    {vehicle.brand} • {vehicle.year}
-                  </Text>
-                </View>
-                <View
-                  className={`px-3 py-1 rounded-full ${
-                    vehicle.availability.isAvailable ? 'bg-green-100' : 'bg-red-100'
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-semibold ${
-                      vehicle.availability.isAvailable ? 'text-green-700' : 'text-red-700'
-                    }`}
-                  >
-                    {vehicle.availability.isAvailable ? 'Available' : 'Booked'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Vehicle Details */}
-              <View className="flex-row items-center mb-3 flex-wrap">
-                <View className="flex-row items-center mr-4 mb-2">
-                  <Fuel size={14} color="#6B7280" />
-                  <Text className="text-xs text-gray-600 ml-1 capitalize">{vehicle.fuelType}</Text>
-                </View>
-                <View className="flex-row items-center mr-4 mb-2">
-                  <SettingsGear size={14} color="#6B7280" />
-                  <Text className="text-xs text-gray-600 ml-1 capitalize">
-                    {vehicle.transmission}
-                  </Text>
-                </View>
-                <View className="flex-row items-center mr-4 mb-2">
-                  <Users size={14} color="#6B7280" />
-                  <Text className="text-xs text-gray-600 ml-1">{vehicle.seats} Seats</Text>
-                </View>
-                <View className="flex-row items-center mb-2">
-                  <MapPin size={14} color="#6B7280" />
-                  <Text className="text-xs text-gray-600 ml-1">
-                    {vehicle.availability.location}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Rating */}
-              {vehicle.rating > 0 && (
-                <View className="flex-row items-center mb-3">
-                  <Star size={14} color="#F59E0B" fill="#F59E0B" />
-                  <Text className="text-sm text-gray-700 ml-1">
-                    {vehicle.rating.toFixed(1)} ({vehicle.totalReviews} reviews)
-                  </Text>
+            <View key={vehicle._id} className="bg-white rounded-lg overflow-hidden mb-4 shadow-sm">
+              {/* Vehicle Image */}
+              {getVehicleImageUrl(vehicle) ? (
+                <Image
+                  source={{
+                    uri: getVehicleImageUrl(vehicle)!,
+                    headers: {
+                      'Accept': 'image/*',
+                    }
+                  }}
+                  className="w-full h-48"
+                  style={{
+                    width: '100%',
+                    height: 192,
+                    backgroundColor: '#E5E7EB'
+                  }}
+                  resizeMode="cover"
+                  onError={(error) => {
+                    console.error('[HomeScreen] Image load error for vehicle:', vehicle.name, error.nativeEvent.error);
+                  }}
+                />
+              ) : (
+                <View className="w-full h-48 bg-gray-200 items-center justify-center">
+                  <SettingsGear size={48} color="#9CA3AF" />
+                  <Text className="text-gray-500 mt-2 text-sm">No Image</Text>
                 </View>
               )}
 
-              {/* Price and Book Button */}
-              <View className="flex-row items-center justify-between pt-3 border-t border-gray-200">
-                <View className="flex-1 mr-3">
-                  <Text className="text-2xl font-bold text-[#0096c7]" numberOfLines={1}>
-                    Rs. {vehicle.pricePerDay?.toLocaleString() || vehicle.pricePerDay || 'N/A'}
-                  </Text>
-                  <Text className="text-xs text-gray-600">/day</Text>
+              <View className="p-4">
+                {/* Vehicle Header */}
+                <View className="flex-row justify-between items-start mb-3">
+                  <View className="flex-1">
+                    <Text className="text-lg font-bold text-gray-800">{vehicle.name}</Text>
+                    <Text className="text-sm text-gray-600 mt-1">
+                      {vehicle.brand} • {vehicle.year}
+                    </Text>
+                  </View>
+                  <View
+                    className={`px-3 py-1 rounded-full ${
+                      vehicle.availability.isAvailable ? 'bg-green-100' : 'bg-red-100'
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold ${
+                        vehicle.availability.isAvailable ? 'text-green-700' : 'text-red-700'
+                      }`}
+                    >
+                      {vehicle.availability.isAvailable ? 'Available' : 'Booked'}
+                    </Text>
+                  </View>
                 </View>
-                <TouchableOpacity
-                  className={`rounded-lg px-6 py-3 ${
-                    vehicle.availability.isAvailable ? 'bg-[#0096c7]' : 'bg-gray-300'
-                  }`}
-                  disabled={!vehicle.availability.isAvailable}
-                  onPress={() => vehicle.availability.isAvailable && onNavigateToBookingForm(vehicle)}
-                >
-                  <Text className="text-white font-semibold">
-                    {vehicle.availability.isAvailable ? 'Book Now' : 'Unavailable'}
-                  </Text>
-                </TouchableOpacity>
+
+                {/* Vehicle Details */}
+                <View className="flex-row items-center mb-3 flex-wrap">
+                  <View className="flex-row items-center mr-4 mb-2">
+                    <Fuel size={14} color="#6B7280" />
+                    <Text className="text-xs text-gray-600 ml-1 capitalize">{vehicle.fuelType}</Text>
+                  </View>
+                  <View className="flex-row items-center mr-4 mb-2">
+                    <SettingsGear size={14} color="#6B7280" />
+                    <Text className="text-xs text-gray-600 ml-1 capitalize">
+                      {vehicle.transmission}
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center mr-4 mb-2">
+                    <Users size={14} color="#6B7280" />
+                    <Text className="text-xs text-gray-600 ml-1">{vehicle.seats} Seats</Text>
+                  </View>
+                  <View className="flex-row items-center mb-2">
+                    <MapPin size={14} color="#6B7280" />
+                    <Text className="text-xs text-gray-600 ml-1">
+                      {vehicle.availability.location}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Rating */}
+                {vehicle.rating > 0 && (
+                  <View className="flex-row items-center mb-3">
+                    <Star size={14} color="#F59E0B" fill="#F59E0B" />
+                    <Text className="text-sm text-gray-700 ml-1">
+                      {vehicle.rating.toFixed(1)} ({vehicle.totalReviews} reviews)
+                    </Text>
+                  </View>
+                )}
+
+                {/* Price and Book Button */}
+                <View className="flex-row items-center justify-between pt-3 border-t border-gray-200">
+                  <View className="flex-1 mr-3">
+                    <Text className="text-2xl font-bold text-[#0096c7]" numberOfLines={1}>
+                      Rs. {vehicle.pricePerDay?.toLocaleString() || vehicle.pricePerDay || 'N/A'}
+                    </Text>
+                    <Text className="text-xs text-gray-600">/day</Text>
+                  </View>
+                  <TouchableOpacity
+                    className={`rounded-lg px-6 py-3 ${
+                      vehicle.availability.isAvailable ? 'bg-[#0096c7]' : 'bg-gray-300'
+                    }`}
+                    disabled={!vehicle.availability.isAvailable}
+                    onPress={() => vehicle.availability.isAvailable && onNavigateToBookingForm(vehicle)}
+                  >
+                    <Text className="text-white font-semibold">
+                      {vehicle.availability.isAvailable ? 'Book Now' : 'Unavailable'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ))

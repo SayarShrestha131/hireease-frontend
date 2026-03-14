@@ -215,6 +215,7 @@ export const BottomTabNavigator: React.FC = () => {
           },
         }}
         onNavigateToConfirmation={navigateToBookingConfirmation}
+        onNavigateToKYC={navigateToKYCSubmission}
         onNavigateBack={navigateBackFromBookingForm}
       />
     );
@@ -228,6 +229,7 @@ export const BottomTabNavigator: React.FC = () => {
           params: bookingFormData,
         }}
         onNavigateToPayment={navigateToPayment}
+        onNavigateToKYC={navigateToKYCSubmission}
         onNavigateBack={navigateBackFromBookingConfirmation}
       />
     );

@@ -23,12 +23,14 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Car,
   Phone,
   Mail,
   Package,
 } from 'lucide-react-native';
 import bookingService from '../services/bookingService';
 import { Booking, BookingStatus } from '../types/booking';
+import { getCurrentApiUrl } from '../config/api';
 
 interface BookingDetailScreenProps {
   bookingId: string;
@@ -423,7 +425,26 @@ export const BookingDetailScreen: React.FC<BookingDetailScreenProps> = ({
   const statusInfo = getStatusInfo(booking.status);
   const StatusIcon = statusInfo.icon;
   const selectedAddOns = getSelectedAddOns();
-  const vehicleImage = booking.vehicle?.images?.[0] || 'https://via.placeholder.com/400';
+  
+  // Get vehicle image URL
+  const getVehicleImageUrl = () => {
+    if (booking.vehicle?.images && booking.vehicle.images.length > 0) {
+      const imageValue = booking.vehicle.images[0];
+      
+      // Check if it's already a full URL (http:// or https://)
+      if (imageValue.startsWith('http://') || imageValue.startsWith('https://')) {
+        return imageValue;
+      }
+      
+      // Otherwise, construct URL from API base
+      const baseUrl = getCurrentApiUrl();
+      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+      return `${cleanBaseUrl}/vehicles/image/${imageValue}?t=${Date.now()}`;
+    }
+    return null; // Return null instead of placeholder URL
+  };
+  
+  const vehicleImage = getVehicleImageUrl();
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -459,16 +480,39 @@ export const BookingDetailScreen: React.FC<BookingDetailScreenProps> = ({
           {booking.vehicle && (
             <View className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
               <Text className="text-base font-semibold text-gray-900 mb-3">Vehicle Details</Text>
-              <Image
-                source={{ uri: vehicleImage }}
-                className="w-full h-48 rounded-lg mb-3"
-                resizeMode="cover"
-              />
+              
+              {/* Vehicle Image or Placeholder */}
+              {vehicleImage ? (
+                <Image
+                  source={{ 
+                    uri: vehicleImage,
+                    headers: {
+                      'Accept': 'image/*',
+                    }
+                  }}
+                  className="w-full h-48 rounded-lg mb-3"
+                  style={{
+                    width: '100%',
+                    height: 192,
+                    borderRadius: 8,
+                    backgroundColor: '#E5E7EB'
+                  }}
+                  resizeMode="cover"
+                  onError={(error) => {
+                    console.error('[BookingDetailScreen] Image load error:', error.nativeEvent.error);
+                  }}
+                />
+              ) : (
+                <View className="w-full h-48 rounded-lg bg-gray-200 items-center justify-center mb-3">
+                  <Car size={64} color="#9CA3AF" />
+                  <Text className="text-gray-500 mt-2 text-sm">No Image Available</Text>
+                </View>
+              )}
               <Text className="text-xl font-bold text-gray-900 mb-1">
                 {booking.vehicle.name}
               </Text>
               <Text className="text-base text-gray-600 mb-3">
-                {booking.vehicle.brand} {booking.vehicle.model}
+                {booking.vehicle.brand} {booking.vehicle.vehicleModel}
               </Text>
               
               {/* Specifications */}

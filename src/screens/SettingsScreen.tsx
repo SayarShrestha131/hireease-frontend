@@ -12,7 +12,8 @@ import {
   SafeAreaView, 
   ScrollView,
   Switch,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { 
   User as UserIcon, 
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../services/apiClient';
+import { getCurrentApiUrl } from '../config/api';
 
 interface SettingsScreenProps {
   onNavigateToChangePassword: () => void;
@@ -87,9 +89,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             activeOpacity={0.7}
           >
             <View className="flex-row items-center">
-              <View className="bg-[#0096c7] rounded-full p-4 mr-4">
-                <UserIcon size={32} color="#FFFFFF" />
-              </View>
+              {user?.profilePicture ? (
+                <Image
+                  source={{ 
+                    uri: `${getCurrentApiUrl()}/profile/picture/${user.profilePicture}?t=${Date.now()}`,
+                    cache: 'reload'
+                  }}
+                  className="w-16 h-16 rounded-full mr-4"
+                  style={{ backgroundColor: '#E5E7EB' }}
+                  onError={(error) => console.error('[SettingsScreen] Image load error:', error.nativeEvent.error)}
+                />
+              ) : (
+                <View className="bg-[#0096c7] rounded-full p-4 mr-4">
+                  <UserIcon size={32} color="#FFFFFF" />
+                </View>
+              )}
               <View className="flex-1">
                 <Text className="text-sm text-gray-600 mb-1">
                   Logged in as

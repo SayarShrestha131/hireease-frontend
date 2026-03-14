@@ -37,12 +37,14 @@ interface BookingConfirmationScreenProps {
     };
   };
   onNavigateToPayment: (booking: Booking) => void;
+  onNavigateToKYC: () => void;
   onNavigateBack: () => void;
 }
 
 export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps> = ({
   route,
   onNavigateToPayment,
+  onNavigateToKYC,
   onNavigateBack,
 }) => {
   const { vehicle, pickupDate, pickupTime, dropoffDate, dropoffTime, addOns, priceBreakdown } =
@@ -169,17 +171,11 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
   };
 
   /**
-   * Navigate to KYC submission (placeholder - needs proper navigation)
+   * Navigate to KYC submission
    */
   const navigateToKYC = () => {
-    // This should navigate to KYC submission screen
-    // For now, just close the modal and show a message
     closeKYCModal();
-    Alert.alert(
-      'KYC Verification',
-      'Please complete KYC verification from your profile settings.',
-      [{ text: 'OK', onPress: onNavigateBack }]
-    );
+    onNavigateToKYC();
   };
 
   /**

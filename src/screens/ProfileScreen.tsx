@@ -14,8 +14,10 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { 
   User as UserIcon, 
   Mail, 
@@ -30,11 +32,13 @@ import {
   FileText,
   Clock,
   UserPlus,
-  Trash2
+  Trash2,
+  Camera
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { EmergencyContact } from '../types/auth';
 import apiClient from '../services/apiClient';
+import { getCurrentApiUrl } from '../config/api';
 
 // Temporary Booking interface until it's properly exported
 interface Booking {
@@ -45,6 +49,12 @@ interface Booking {
   endDate: string;
   pickupLocation: string;
   totalPrice: number;
+  vehicle?: {
+    _id: string;
+    name: string;
+    vehicleModel?: string;
+    images?: string[];
+  };
 }
 
 interface ProfileScreenProps {
@@ -63,6 +73,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
   const [loading, setLoading] = useState(false);
   const [fetchingProfile, setFetchingProfile] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [updateRestriction, setUpdateRestriction] = useState<{
+    canUpdate: boolean;
+    daysRemaining?: number;
+    nextUpdateDate?: Date;
+  } | null>(null);
 
   // Profile fields
   const [username, setUsername] = useState(user?.username || '');
@@ -153,6 +169,116 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
     }
   };
 
+  const handlePickImage = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload a profile picture.');
+        return;
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadProfilePicture(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const uploadProfilePicture = async (imageUri: string) => {
+    try {
+      setUploadingImage(true);
+      console.log('[ProfileScreen] Starting upload for:', imageUri);
+
+      // Create form data
+      const formData = new FormData();
+      const filename = imageUri.split('/').pop() || 'profile.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      console.log('[ProfileScreen] File details:', { filename, type });
+
+      formData.append('profilePicture', {
+        uri: imageUri,
+        name: filename,
+        type,
+      } as any);
+
+      // Upload to server
+      console.log('[ProfileScreen] Uploading to:', `${getCurrentApiUrl()}/profile/picture`);
+      const response = await apiClient.post('/profile/picture', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      console.log('[ProfileScreen] Upload response:', response.data);
+
+      if (response.data.success) {
+        console.log('[ProfileScreen] Upload successful, refreshing user data...');
+        await refreshUser();
+        console.log('[ProfileScreen] User data refreshed');
+        Alert.alert('Success', 'Profile picture updated successfully');
+      }
+    } catch (error: any) {
+      console.error('[ProfileScreen] Error uploading profile picture:', error);
+      console.error('[ProfileScreen] Error response:', error.response?.data);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to upload profile picture');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleDeleteProfilePicture = async () => {
+    Alert.alert(
+      'Delete Profile Picture',
+      'Are you sure you want to delete your profile picture?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setUploadingImage(true);
+              await apiClient.delete('/profile/picture');
+              await refreshUser();
+              Alert.alert('Success', 'Profile picture deleted successfully');
+            } catch (error: any) {
+              console.error('Error deleting profile picture:', error);
+              Alert.alert('Error', error.response?.data?.error || 'Failed to delete profile picture');
+            } finally {
+              setUploadingImage(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getProfilePictureUrl = () => {
+    if (user?.profilePicture) {
+      const baseUrl = getCurrentApiUrl();
+      // Ensure proper URL formatting - remove any trailing slashes from baseUrl
+      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+      const imageUrl = `${cleanBaseUrl}/profile/picture/${user.profilePicture}?t=${Date.now()}`;
+      console.log('[ProfileScreen] Profile picture URL:', imageUrl);
+      return imageUrl;
+    }
+    return null;
+  };
+
   const handleUpdateProfile = async () => {
     try {
       setLoading(true);
@@ -194,15 +320,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
         };
       }
 
-      await apiClient.put('/profile', updateData);
+      const response = await apiClient.put('/profile', updateData);
       await refreshUser();
+
+      // Check if there's a next update date in response
+      if (response.data.data.nextUpdateAllowed) {
+        setUpdateRestriction({
+          canUpdate: false,
+          daysRemaining: 7,
+          nextUpdateDate: new Date(response.data.data.nextUpdateAllowed)
+        });
+      }
 
       Alert.alert('Success', 'Profile updated successfully');
       setIsEditing(false);
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || 'Failed to update profile';
       setError(errorMessage);
-      Alert.alert('Error', errorMessage);
+      
+      // Check if error is due to 7-day restriction
+      if (err.response?.status === 403 && err.response?.data?.data) {
+        const restrictionData = err.response.data.data;
+        setUpdateRestriction({
+          canUpdate: false,
+          daysRemaining: restrictionData.daysRemaining,
+          nextUpdateDate: new Date(restrictionData.nextUpdateDate)
+        });
+        
+        Alert.alert(
+          'Update Restricted',
+          `You can only update your profile once every 7 days. Please try again in ${restrictionData.daysRemaining} day(s).`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -263,13 +415,42 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
     });
   };
 
+  const getVehicleImageUrl = (booking: Booking) => {
+    if (booking.vehicle?.images && booking.vehicle.images.length > 0) {
+      const imageValue = booking.vehicle.images[0];
+      
+      // Check if it's already a full URL (http:// or https://)
+      if (imageValue.startsWith('http://') || imageValue.startsWith('https://')) {
+        return imageValue;
+      }
+      
+      // Otherwise, construct URL from API base
+      const baseUrl = getCurrentApiUrl();
+      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+      return `${cleanBaseUrl}/vehicles/image/${imageValue}?t=${Date.now()}`;
+    }
+    return null;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed': return 'text-green-600';
-      case 'active': return 'text-blue-600';
-      case 'completed': return 'text-gray-600';
-      case 'cancelled': return 'text-red-600';
-      default: return 'text-yellow-600';
+      case 'confirmed': return 'bg-green-100';
+      case 'active': return 'bg-blue-100';
+      case 'completed': return 'bg-gray-100';
+      case 'cancelled': return 'bg-red-100';
+      case 'pending': return 'bg-yellow-100';
+      default: return 'bg-yellow-100';
+    }
+  };
+
+  const getStatusTextColor = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'text-green-700';
+      case 'active': return 'text-blue-700';
+      case 'completed': return 'text-gray-700';
+      case 'cancelled': return 'text-red-700';
+      case 'pending': return 'text-yellow-700';
+      default: return 'text-yellow-700';
     }
   };
 
@@ -295,6 +476,89 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
 
   const renderProfileTab = () => (
     <View>
+      {/* Update Restriction Notice */}
+      {updateRestriction && !updateRestriction.canUpdate && (activeTab === 'profile' || activeTab === 'contact') && (
+        <View className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+          <View className="flex-row items-start">
+            <Clock size={20} color="#F59E0B" />
+            <View className="flex-1 ml-3">
+              <Text className="text-yellow-800 font-semibold mb-1">Profile Update Restriction</Text>
+              <Text className="text-yellow-700 text-sm">
+                You can update your profile again in {updateRestriction.daysRemaining} day(s).
+              </Text>
+              <Text className="text-yellow-600 text-xs mt-1">
+                Next update: {updateRestriction.nextUpdateDate?.toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Profile Picture Section */}
+      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm items-center">
+        <Text className="text-lg font-bold text-gray-800 mb-4 self-start">Profile Picture</Text>
+        
+        <View className="relative mb-4">
+          {getProfilePictureUrl() ? (
+            <Image
+              source={{ 
+                uri: getProfilePictureUrl()!,
+                headers: {
+                  'Accept': 'image/*',
+                }
+              }}
+              className="w-32 h-32 rounded-full"
+              style={{ 
+                backgroundColor: '#E5E7EB',
+                width: 128,
+                height: 128,
+                borderRadius: 64
+              }}
+              resizeMode="cover"
+              onLoad={() => console.log('[ProfileScreen] Image loaded successfully')}
+              onError={(error) => {
+                console.error('[ProfileScreen] Image load error:', error.nativeEvent.error);
+                console.error('[ProfileScreen] Failed URL:', getProfilePictureUrl());
+              }}
+            />
+          ) : (
+            <View className="w-32 h-32 rounded-full bg-gray-200 items-center justify-center">
+              <UserIcon size={48} color="#9CA3AF" />
+            </View>
+          )}
+          
+          {uploadingImage && (
+            <View className="absolute inset-0 w-32 h-32 rounded-full bg-black/50 items-center justify-center">
+              <ActivityIndicator color="#FFFFFF" />
+            </View>
+          )}
+        </View>
+
+        <View className="flex-row space-x-3">
+          <TouchableOpacity
+            onPress={handlePickImage}
+            disabled={uploadingImage}
+            className="bg-[#0096c7] rounded-lg px-6 py-3 flex-row items-center"
+          >
+            <Camera size={18} color="#FFFFFF" />
+            <Text className="text-white font-semibold ml-2">
+              {getProfilePictureUrl() ? 'Change' : 'Upload'}
+            </Text>
+          </TouchableOpacity>
+
+          {getProfilePictureUrl() && (
+            <TouchableOpacity
+              onPress={handleDeleteProfilePicture}
+              disabled={uploadingImage}
+              className="bg-red-500 rounded-lg px-6 py-3 flex-row items-center"
+            >
+              <Trash2 size={18} color="#FFFFFF" />
+              <Text className="text-white font-semibold ml-2">Remove</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">
         <Text className="text-lg font-bold text-gray-800 mb-4">Personal Information</Text>
 
@@ -549,25 +813,75 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
           <ActivityIndicator size="large" color="#0096c7" />
         </View>
       ) : bookings.length > 0 ? (
-        bookings.map((booking) => (
-          <View key={booking._id} className="bg-white rounded-lg p-4 mb-3 shadow-sm">
-            <View className="flex-row justify-between items-start mb-2">
-              <Text className="text-lg font-bold text-gray-800">{booking.vehicleName}</Text>
-              <Text className={`text-sm font-semibold capitalize ${getStatusColor(booking.status)}`}>
-                {booking.status}
-              </Text>
+        bookings.map((booking) => {
+          const vehicleImageUrl = getVehicleImageUrl(booking);
+          const vehicleName = booking.vehicle?.name || booking.vehicleName || 'Vehicle';
+          
+          return (
+            <View key={booking._id} className="bg-white rounded-lg overflow-hidden mb-3 shadow-sm">
+              {/* Vehicle Image */}
+              {vehicleImageUrl ? (
+                <Image
+                  source={{
+                    uri: vehicleImageUrl,
+                    headers: {
+                      'Accept': 'image/*',
+                    }
+                  }}
+                  className="w-full h-40"
+                  style={{
+                    width: '100%',
+                    height: 160,
+                    backgroundColor: '#E5E7EB'
+                  }}
+                  resizeMode="cover"
+                  onError={(error) => {
+                    console.error('[ProfileScreen] Booking image load error:', error.nativeEvent.error);
+                  }}
+                />
+              ) : (
+                <View className="w-full h-40 bg-gray-200 items-center justify-center">
+                  <Clock size={48} color="#9CA3AF" />
+                </View>
+              )}
+
+              <View className="p-4">
+                {/* Vehicle Name and Status */}
+                <View className="flex-row justify-between items-start mb-2">
+                  <Text className="text-lg font-bold text-gray-800 flex-1" numberOfLines={1}>
+                    {vehicleName}
+                  </Text>
+                  <View className={`px-3 py-1 rounded-full ml-2 ${getStatusColor(booking.status)}`}>
+                    <Text className={`text-xs font-semibold capitalize ${getStatusTextColor(booking.status)}`}>
+                      {booking.status}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Dates */}
+                <View className="flex-row items-center mb-2">
+                  <Calendar size={14} color="#6B7280" />
+                  <Text className="text-sm text-gray-600 ml-2">
+                    {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
+                  </Text>
+                </View>
+
+                {/* Pickup Location */}
+                <View className="flex-row items-center mb-2">
+                  <MapPin size={14} color="#6B7280" />
+                  <Text className="text-sm text-gray-600 ml-2">
+                    {booking.pickupLocation}
+                  </Text>
+                </View>
+
+                {/* Price */}
+                <Text className="text-base font-semibold text-[#0096c7] mt-2">
+                  Rs. {booking.totalPrice.toLocaleString()}
+                </Text>
+              </View>
             </View>
-            <Text className="text-sm text-gray-600 mb-1">
-              {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
-            </Text>
-            <Text className="text-sm text-gray-600 mb-1">
-              Pickup: {booking.pickupLocation}
-            </Text>
-            <Text className="text-base font-semibold text-[#0096c7] mt-2">
-              Rs. {booking.totalPrice.toLocaleString()}
-            </Text>
-          </View>
-        ))
+          );
+        })
       ) : (
         <View className="bg-white rounded-lg p-8 items-center">
           <Clock size={48} color="#9CA3AF" />

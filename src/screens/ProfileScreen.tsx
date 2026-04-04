@@ -33,12 +33,15 @@ import {
   Clock,
   UserPlus,
   Trash2,
-  Camera
+  Camera,
+  AlertCircle
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { EmergencyContact } from '../types/auth';
 import apiClient from '../services/apiClient';
 import { getCurrentApiUrl } from '../config/api';
+import { ProfilePictureUpload } from '../components/ProfilePictureUpload';
+import profileService from '../services/profileService';
 
 // Temporary Booking interface until it's properly exported
 interface Booking {
@@ -79,6 +82,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
     daysRemaining?: number;
     nextUpdateDate?: Date;
   } | null>(null);
+  const [profilePictureError, setProfilePictureError] = useState<string | null>(null);
 
   // Profile fields
   const [username, setUsername] = useState(user?.username || '');
@@ -199,45 +203,70 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
   const uploadProfilePicture = async (imageUri: string) => {
     try {
       setUploadingImage(true);
+      setProfilePictureError(null);
+      console.log('[ProfileScreen] ========== UPLOAD START ==========');
       console.log('[ProfileScreen] Starting upload for:', imageUri);
 
-      // Create form data
-      const formData = new FormData();
+      // Prepare image data for profile service
       const filename = imageUri.split('/').pop() || 'profile.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-      console.log('[ProfileScreen] File details:', { filename, type });
-
-      formData.append('profilePicture', {
+      const imageData = {
         uri: imageUri,
         name: filename,
         type,
-      } as any);
+      };
 
-      // Upload to server
-      console.log('[ProfileScreen] Uploading to:', `${getCurrentApiUrl()}/profile/picture`);
-      const response = await apiClient.post('/profile/picture', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      console.log('[ProfileScreen] Image data prepared:', imageData);
+      console.log('[ProfileScreen] Using profile service for upload...');
+      
+      // Use profile service for upload
+      const response = await profileService.uploadProfilePicture(imageData);
 
-      console.log('[ProfileScreen] Upload response:', response.data);
+      console.log('[ProfileScreen] Upload response:', response);
 
-      if (response.data.success) {
+      if (response.success) {
         console.log('[ProfileScreen] Upload successful, refreshing user data...');
         await refreshUser();
         console.log('[ProfileScreen] User data refreshed');
+        console.log('[ProfileScreen] ========== UPLOAD END (SUCCESS) ==========');
         Alert.alert('Success', 'Profile picture updated successfully');
       }
     } catch (error: any) {
+      console.error('[ProfileScreen] ========== UPLOAD END (ERROR) ==========');
       console.error('[ProfileScreen] Error uploading profile picture:', error);
-      console.error('[ProfileScreen] Error response:', error.response?.data);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to upload profile picture');
+      console.error('[ProfileScreen] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      const errorMessage = error.message || 'Failed to upload profile picture';
+      setProfilePictureError(errorMessage);
+      Alert.alert('Error', errorMessage);
     } finally {
       setUploadingImage(false);
     }
+  };
+
+  const handleProfilePictureUploadStart = () => {
+    setUploadingImage(true);
+    setProfilePictureError(null);
+  };
+
+  const handleProfilePictureUploadSuccess = async (imageUri: string) => {
+    await uploadProfilePicture(imageUri);
+  };
+
+  const handleProfilePictureUploadError = (error: string) => {
+    setProfilePictureError(error);
+    setUploadingImage(false);
+  };
+
+  const handleProfilePictureImageSelected = async (imageUri: string) => {
+    // Image selected, automatically upload it
+    console.log('[ProfileScreen] Image selected, uploading:', imageUri);
+    await uploadProfilePicture(imageUri);
   };
 
   const handleDeleteProfilePicture = async () => {
@@ -252,12 +281,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
           onPress: async () => {
             try {
               setUploadingImage(true);
-              await apiClient.delete('/profile/picture');
+              console.log('[ProfileScreen] Using profile service for deletion...');
+              
+              // Use profile service for deletion
+              await profileService.deleteProfilePicture();
+              
               await refreshUser();
               Alert.alert('Success', 'Profile picture deleted successfully');
             } catch (error: any) {
               console.error('Error deleting profile picture:', error);
-              Alert.alert('Error', error.response?.data?.error || 'Failed to delete profile picture');
+              const errorMessage = error.message || 'Failed to delete profile picture';
+              Alert.alert('Error', errorMessage);
             } finally {
               setUploadingImage(false);
             }
@@ -270,9 +304,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
   const getProfilePictureUrl = () => {
     if (user?.profilePicture) {
       const baseUrl = getCurrentApiUrl();
-      // Ensure proper URL formatting - remove any trailing slashes from baseUrl
-      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
-      const imageUrl = `${cleanBaseUrl}/profile/picture/${user.profilePicture}?t=${Date.now()}`;
+      // Remove /api suffix from baseUrl since we need the root URL
+      const rootUrl = baseUrl.replace(/\/api\/?$/, '');
+      const imageUrl = `${rootUrl}/api/profile/picture/${user.profilePicture}?t=${Date.now()}`;
       console.log('[ProfileScreen] Profile picture URL:', imageUrl);
       return imageUrl;
     }
@@ -291,7 +325,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
           setError('Username must be at least 2 characters');
           return;
         }
-        updateData.username = username;
+        if (username) {
+          updateData.username = username;
+        }
         
         // Format date of birth to YYYY-MM-DD with zero-padding
         if (dateOfBirth) {
@@ -476,8 +512,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
 
   const renderProfileTab = () => (
     <View>
-      {/* Update Restriction Notice */}
-      {updateRestriction && !updateRestriction.canUpdate && (activeTab === 'profile' || activeTab === 'contact') && (
+      {/* Update Restriction Notice - DISABLED for testing */}
+      {false && updateRestriction && !updateRestriction.canUpdate && (activeTab === 'profile' || activeTab === 'contact') && (
         <View className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
           <View className="flex-row items-start">
             <Clock size={20} color="#F59E0B" />
@@ -495,68 +531,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
       )}
 
       {/* Profile Picture Section */}
-      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm items-center">
-        <Text className="text-lg font-bold text-gray-800 mb-4 self-start">Profile Picture</Text>
+      <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">
+        <Text className="text-lg font-bold text-gray-800 mb-4">Profile Picture</Text>
         
-        <View className="relative mb-4">
-          {getProfilePictureUrl() ? (
-            <Image
-              source={{ 
-                uri: getProfilePictureUrl()!,
-                headers: {
-                  'Accept': 'image/*',
-                }
-              }}
-              className="w-32 h-32 rounded-full"
-              style={{ 
-                backgroundColor: '#E5E7EB',
-                width: 128,
-                height: 128,
-                borderRadius: 64
-              }}
-              resizeMode="cover"
-              onLoad={() => console.log('[ProfileScreen] Image loaded successfully')}
-              onError={(error) => {
-                console.error('[ProfileScreen] Image load error:', error.nativeEvent.error);
-                console.error('[ProfileScreen] Failed URL:', getProfilePictureUrl());
-              }}
-            />
-          ) : (
-            <View className="w-32 h-32 rounded-full bg-gray-200 items-center justify-center">
-              <UserIcon size={48} color="#9CA3AF" />
-            </View>
-          )}
-          
-          {uploadingImage && (
-            <View className="absolute inset-0 w-32 h-32 rounded-full bg-black/50 items-center justify-center">
-              <ActivityIndicator color="#FFFFFF" />
-            </View>
-          )}
-        </View>
+        {/* Profile Picture Upload Component */}
+        <ProfilePictureUpload
+          currentImageUrl={getProfilePictureUrl()}
+          onUploadStart={handleProfilePictureUploadStart}
+          onUploadSuccess={handleProfilePictureUploadSuccess}
+          onUploadError={handleProfilePictureUploadError}
+          onImageSelected={handleProfilePictureImageSelected}
+          disabled={uploadingImage || !isEditing}
+        />
 
-        <View className="flex-row space-x-3">
+        {/* Profile Picture Requirement Notice */}
+        {!user?.profilePicture && (
+          <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+            <View className="flex-row items-start">
+              <AlertCircle size={20} color="#3B82F6" />
+              <View className="flex-1 ml-3">
+                <Text className="text-blue-800 font-semibold mb-1">Profile Picture Required for KYC</Text>
+                <Text className="text-blue-700 text-sm">
+                  You must upload a profile picture before you can submit KYC verification. This helps us verify your identity.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Delete Profile Picture Option */}
+        {user?.profilePicture && isEditing && (
           <TouchableOpacity
-            onPress={handlePickImage}
+            onPress={handleDeleteProfilePicture}
             disabled={uploadingImage}
-            className="bg-[#0096c7] rounded-lg px-6 py-3 flex-row items-center"
+            className="bg-red-50 border border-red-200 rounded-lg py-3 flex-row items-center justify-center mt-4"
+            activeOpacity={0.7}
           >
-            <Camera size={18} color="#FFFFFF" />
-            <Text className="text-white font-semibold ml-2">
-              {getProfilePictureUrl() ? 'Change' : 'Upload'}
-            </Text>
+            <Trash2 size={18} color="#EF4444" />
+            <Text className="text-red-600 font-semibold ml-2">Delete Profile Picture</Text>
           </TouchableOpacity>
-
-          {getProfilePictureUrl() && (
-            <TouchableOpacity
-              onPress={handleDeleteProfilePicture}
-              disabled={uploadingImage}
-              className="bg-red-500 rounded-lg px-6 py-3 flex-row items-center"
-            >
-              <Trash2 size={18} color="#FFFFFF" />
-              <Text className="text-white font-semibold ml-2">Remove</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        )}
       </View>
 
       <View className="bg-white rounded-lg p-6 mb-4 shadow-sm">

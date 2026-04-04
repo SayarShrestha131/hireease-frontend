@@ -7,3 +7,4 @@ export { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 export { ErrorDisplay } from './ErrorDisplay';
 export { KYCVerificationModal } from './KYCVerificationModal';
 export { AvailabilityConflictAlert } from './AvailabilityConflictAlert';
+export { ProfilePictureUpload } from './ProfilePictureUpload';

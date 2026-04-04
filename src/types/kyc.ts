@@ -10,25 +10,80 @@
 export type KYCStatus = 'pending' | 'approved' | 'rejected';
 
 /**
+ * KYC eligibility check response
+ */
+export interface KYCEligibility {
+  hasProfilePicture: boolean;
+  hasPendingSubmission: boolean;
+}
+
+/**
+ * Face detection result from image processing
+ * Alias for FaceDetection interface for backward compatibility
+ */
+export type FaceDetectionResult = FaceDetection;
+
+/**
+ * OCR field confidence scores (0-100 range)
+ */
+export interface OCRFieldConfidence {
+  licenseNumber?: number;
+  fullName?: number;
+  fatherName?: number;
+  dateOfBirth?: number;
+  expiryDate?: number;
+  issueDate?: number;
+  issuingAuthority?: number;
+  address?: number;
+  citizenshipNumber?: number;
+  licenseType?: number;
+  contactNumber?: number;
+}
+
+/**
  * OCR extracted data from license images
  */
 export interface OCRData {
   frontImage: {
     licenseNumber?: string;
     fullName?: string;
+    fatherName?: string;
     dateOfBirth?: string;
     expiryDate?: string;
+    issueDate?: string;
+    issuingAuthority?: string;
     address?: string;
+    citizenshipNumber?: string;
+    licenseType?: string;
     rawText: string;
     confidence: number;
   };
-  backImage: {
+  backImage?: {
     address?: string;
     additionalInfo?: string;
     rawText: string;
     confidence: number;
   };
   extractedAt: string;
+  overallConfidence?: number;
+  fieldConfidence?: OCRFieldConfidence;
+  qualityCheck: {
+    isGoodQuality: boolean;
+    issues: string[];
+    recommendation?: string;
+  };
+}
+
+/**
+ * Data verification result (comparison between user input and OCR)
+ */
+export interface DataVerification {
+  licenseNumberMatch: boolean;
+  nameMatch: boolean;
+  dobMatch: boolean;
+  expiryDateMatch: boolean;
+  matchScore: number;
+  checkedAt: string;
 }
 
 /**
@@ -39,8 +94,40 @@ export interface FaceDetection {
   faceCount?: number;
   confidence: number;
   isRealFace?: boolean;
+  isIdentityMatch?: boolean;
+  identityConfidence?: number;
+  identityMessage?: string;
   message: string;
   verifiedAt: string;
+}
+
+export interface FaceDecision {
+  resultCode: 'VERIFIED' | 'UNCERTAIN' | 'REJECTED';
+  matched: boolean;
+  confidence: number;
+  reason: string;
+  reviewedSignal: 'auto-face-match' | 'manual-review-needed';
+  verifiedAt: string;
+}
+
+/**
+ * KYC eligibility check full response (including error cases)
+ */
+export interface KYCEligibilityResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: KYCEligibility;
+  requiresProfilePicture?: boolean;
+  hasPendingSubmission?: boolean;
+  submissionId?: string;
+  guidance?: string[];
+  estimatedReviewTime?: string;
+  nextSteps?: {
+    action: string;
+    url: string;
+    method: string;
+  };
 }
 
 /**
@@ -50,41 +137,54 @@ export interface KYCSubmission {
   _id: string;
   userId: string;
   status: KYCStatus;
-  
-  // License Information
+  isAutoApproved?: boolean;
+
+  // License Information (User Provided)
   licenseNumber: string;
   fullName: string;
-  dateOfBirth: string; // ISO date string
-  licenseExpiryDate: string; // ISO date string
-  
+  fatherName?: string;
+  dateOfBirth: string;
+  licenseExpiryDate: string;
+  licenseIssueDate?: string;
+  issuedBy?: string; // Government of Nepal
+  licenseOffice?: string; // Transport office
+  fullAddress?: string;
+  contactNumber?: string;
+  citizenshipNumber?: string;
+  licenseType?: string;
+
   // Document Images (filenames)
   licenseFrontImage: string;
-  licenseBackImage?: string; // Now optional
-  selfieImage: string; // Now required
-  
-  // OCR Extracted Data
+  licenseBackImage?: string;
+  selfieImage: string;
+
+  // OCR Extracted Data (for admin reference only)
   ocrData?: OCRData;
-  
+
+  // Data Verification Results
+  dataVerification?: DataVerification;
+
   // Face Detection Result
   faceDetection?: FaceDetection;
-  
+  faceDecision?: FaceDecision;
+
   // Virtual image URLs (added by backend)
   licenseFrontImageUrl?: string;
   licenseBackImageUrl?: string;
-  
+
   // Review Information
-  reviewedBy?: string; // Admin user ID
-  reviewedAt?: string; // ISO date string
-  reviewNote?: string; // Approval note or rejection reason
-  
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+
   // Submission History
-  submittedAt: string; // ISO date string
-  previousSubmissionId?: string; // Link to previous rejected submission
-  
+  submittedAt: string;
+  previousSubmissionId?: string;
+
   // Timestamps
   createdAt: string;
   updatedAt: string;
-  
+
   // Populated user details (when included by backend)
   user?: {
     _id: string;
@@ -93,20 +193,25 @@ export interface KYCSubmission {
     lastName?: string;
     phoneNumber?: string;
   };
-  
+
   // Previous submission details (when included by backend)
   previousSubmission?: KYCSubmission;
 }
 
 /**
  * Form data interface for KYC submission
- * Used when creating a new KYC application
  */
 export interface KYCFormData {
   licenseNumber: string;
   fullName: string;
+  fatherName?: string;
   dateOfBirth: Date;
   licenseExpiryDate: Date;
+  licenseIssueDate?: Date;
+  issuedBy: string;
+  licenseOffice: string;
+  address: string;
+  contactNumber: string;
   licenseFrontImage: {
     uri: string;
     type: string;
@@ -116,29 +221,27 @@ export interface KYCFormData {
     uri: string;
     type: string;
     name: string;
-  } | null; // Now optional
+  } | null;
   selfieImage: {
     uri: string;
     type: string;
     name: string;
-  } | null; // Now required
-  previousSubmissionId?: string; // For resubmissions
+  } | null;
+  previousSubmissionId?: string;
 }
 
 /**
  * Filters interface for admin KYC submission list
- * Used to filter and search submissions in the admin panel
  */
 export interface KYCFilters {
   status?: 'all' | 'pending' | 'approved' | 'rejected';
-  search?: string; // Search by name or license number
+  search?: string;
   page?: number;
   limit?: number;
 }
 
 /**
  * Paginated response interface for admin KYC submission list
- * Returned by the admin submissions endpoint
  */
 export interface PaginatedKYCResponse {
   submissions: KYCSubmission[];
@@ -162,11 +265,11 @@ export interface KYCSubmissionResponse {
  * Admin action request interfaces
  */
 export interface ApproveKYCRequest {
-  note?: string; // Optional approval note
+  note?: string;
 }
 
 export interface RejectKYCRequest {
-  reason: string; // Required rejection reason (min 10 characters)
+  reason: string;
 }
 
 /**
@@ -184,10 +287,51 @@ export interface KYCActionResponse {
 export interface KYCFormErrors {
   licenseNumber?: string;
   fullName?: string;
+  fatherName?: string;
   dateOfBirth?: string;
   licenseExpiryDate?: string;
+  licenseIssueDate?: string;
+  issuedBy?: string;
+  licenseOffice?: string;
+  address?: string;
+  contactNumber?: string;
   licenseFrontImage?: string;
   licenseBackImage?: string;
-  selfieImage?: string; // Added selfie validation
+  selfieImage?: string;
   general?: string;
 }
+
+/**
+ * Confidence level thresholds for UI display
+ */
+export interface ConfidenceThresholds {
+  low: number;    // Below this is red (poor confidence)
+  medium: number; // Between low and medium is yellow (uncertain)
+  high: number;   // Above medium is green (good confidence)
+}
+
+/**
+ * Default confidence thresholds based on design document
+ */
+export const DEFAULT_CONFIDENCE_THRESHOLDS: ConfidenceThresholds = {
+  low: 60,
+  medium: 85,
+  high: 95
+};
+
+/**
+ * Confidence level enum for UI components
+ */
+export type ConfidenceLevel = 'low' | 'medium' | 'high';
+
+/**
+ * Helper function to determine confidence level
+ */
+export const getConfidenceLevel = (
+  score: number, 
+  thresholds: ConfidenceThresholds = DEFAULT_CONFIDENCE_THRESHOLDS
+): ConfidenceLevel => {
+  if (score < thresholds.low) return 'low';
+  if (score < thresholds.medium) return 'medium';
+  return 'high';
+};

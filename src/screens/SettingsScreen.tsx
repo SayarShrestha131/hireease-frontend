@@ -92,12 +92,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               {user?.profilePicture ? (
                 <Image
                   source={{ 
-                    uri: `${getCurrentApiUrl()}/profile/picture/${user.profilePicture}?t=${Date.now()}`,
-                    cache: 'reload'
+                    uri: `${getCurrentApiUrl().replace(/\/api\/?$/, '')}/api/profile/picture/${user.profilePicture}?t=${Date.now()}`
                   }}
                   className="w-16 h-16 rounded-full mr-4"
                   style={{ backgroundColor: '#E5E7EB' }}
-                  onError={(error) => console.error('[SettingsScreen] Image load error:', error.nativeEvent.error)}
+                  onError={(error) => {
+                    console.error('[SettingsScreen] Image load error:', error.nativeEvent.error);
+                    console.log('[SettingsScreen] Failed URL:', `${getCurrentApiUrl().replace(/\/api\/?$/, '')}/api/profile/picture/${user.profilePicture}`);
+                  }}
                 />
               ) : (
                 <View className="bg-[#0096c7] rounded-full p-4 mr-4">

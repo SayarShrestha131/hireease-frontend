@@ -94,28 +94,31 @@ export const testConnection = async (url: string): Promise<boolean> => {
  */
 const getBaseURL = (): string => {
   try {
-    if (typeof __DEV__ !== 'undefined' && !__DEV__) {
-      return 'https://api.production.com/api';
-    }
+    const configuredBaseUrl =
+      typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE_URL
+        ? process.env.EXPO_PUBLIC_API_BASE_URL
+        : null;
+    if (configuredBaseUrl) return configuredBaseUrl;
 
     const NGROK_URL = typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_NGROK_URL 
       ? `${process.env.EXPO_PUBLIC_NGROK_URL}/api`
       : null;
-    
+
     if (NGROK_URL) {
       return NGROK_URL;
     }
 
-    const NETWORK_IP = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_NETWORK_IP) || '10.218.131.72';
-    return `http://${NETWORK_IP}:5000/api`;
+    const NETWORK_IP = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_NETWORK_IP) || '127.0.0.1';
+    const fallbackURL = `http://${NETWORK_IP}:5000/api`;
+    return fallbackURL;
   } catch (error) {
     console.error('[API Config] Error getting base URL:', error);
-    return 'http://10.218.131.72:5000/api';
+    return 'http://127.0.0.1:5000/api';
   }
 };
 
 // Don't call getBaseURL() at module load - use a default value
-let baseURL = 'http://10.218.131.72:5000/api';
+let baseURL = 'http://127.0.0.1:5000/api';
 let isInitialized = false;
 
 // Initialize on first access

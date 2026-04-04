@@ -26,8 +26,10 @@ import {
   Users,
   Fuel,
   Settings as SettingsGear,
+  Calendar,
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import { Vehicle, VehicleFilters, FilterOptions } from '../types/vehicle';
 import apiClient from '../services/apiClient';
 import { getCurrentApiUrl } from '../config/api';
@@ -43,6 +45,7 @@ interface HomeScreenProps {
  */
 const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigateToBookingForm }) => {
   const { user } = useAuth();
+  const { checkForNewVehicles } = useNotifications();
 
   // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -50,6 +53,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // Filters
   const [filters, setFilters] = useState<VehicleFilters>({
@@ -69,6 +73,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
   useEffect(() => {
     fetchFilterOptions();
   }, []);
+
+  // Check for new vehicles when screen becomes active
+  useEffect(() => {
+    console.log('[HomeScreen] Screen mounted, checking for new vehicles...');
+    // Small delay to ensure context is ready
+    const timer = setTimeout(() => {
+      checkForNewVehicles();
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []); // Empty dependency array to run only once on mount
 
   const fetchVehicles = async () => {
     try {
@@ -143,6 +158,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
         return imageValue;
       }
       
+      
       // Otherwise, construct URL from API base
       const baseUrl = getCurrentApiUrl();
       const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
@@ -154,6 +170,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
     return null;
   };
 
+  const handleImageError = (vehicleId: string, vehicleName: string, error: any) => {
+    console.error('[HomeScreen] Image load error for vehicle:', vehicleName, error.nativeEvent?.error || error);
+    setImageErrors(prev => new Set(prev).add(vehicleId));
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
       {/* Header */}
@@ -162,16 +183,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
           <View className="flex-1">
             <Text className="text-white text-sm opacity-90">Welcome back,</Text>
             <Text className="text-white text-xl font-bold mt-1">
-              {user?.email?.split('@')[0] || 'User'}
+              {user?.username || user?.email?.split('@')[0] || 'User'}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={onNavigateToSettings}
-            className="bg-white/20 rounded-full p-3"
-            activeOpacity={0.7}
-          >
-            <Settings size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              onPress={onNavigateToSettings}
+              className="bg-white/20 rounded-full p-3"
+              activeOpacity={0.7}
+            >
+              <Settings size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search Bar */}
@@ -192,6 +215,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
             <Filter size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+
       </View>
 
       {/* Active Filters */}
@@ -244,34 +268,41 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
             <Text className="text-center text-gray-500 mt-2">Try adjusting your filters</Text>
           </View>
         ) : (
-          vehicles.map((vehicle) => (
-            <View key={vehicle._id} className="bg-white rounded-lg overflow-hidden mb-4 shadow-sm">
-              {/* Vehicle Image */}
-              {getVehicleImageUrl(vehicle) ? (
-                <Image
-                  source={{
-                    uri: getVehicleImageUrl(vehicle)!,
-                    headers: {
-                      'Accept': 'image/*',
-                    }
-                  }}
-                  className="w-full h-48"
-                  style={{
-                    width: '100%',
-                    height: 192,
-                    backgroundColor: '#E5E7EB'
-                  }}
-                  resizeMode="cover"
-                  onError={(error) => {
-                    console.error('[HomeScreen] Image load error for vehicle:', vehicle.name, error.nativeEvent.error);
-                  }}
-                />
-              ) : (
-                <View className="w-full h-48 bg-gray-200 items-center justify-center">
-                  <SettingsGear size={48} color="#9CA3AF" />
-                  <Text className="text-gray-500 mt-2 text-sm">No Image</Text>
-                </View>
-              )}
+          vehicles.map((vehicle) => {
+            const imageUrl = getVehicleImageUrl(vehicle);
+            
+            return (
+              <View key={vehicle._id} className="bg-white rounded-lg overflow-hidden mb-4 shadow-sm">
+                {/* Vehicle Image */}
+                {imageUrl && !imageErrors.has(vehicle._id) ? (
+                  <Image
+                    source={{
+                      uri: imageUrl,
+                      headers: {
+                        'Accept': 'image/*',
+                      }
+                    }}
+                    className="w-full h-48"
+                    style={{
+                      width: '100%',
+                      height: 192,
+                      backgroundColor: '#E5E7EB'
+                    }}
+                    resizeMode="cover"
+                    onError={(error) => handleImageError(vehicle._id, vehicle.name, error)}
+                    onLoadStart={() => {
+                      console.log('[HomeScreen] Loading image for:', vehicle.name);
+                    }}
+                    onLoad={() => {
+                      console.log('[HomeScreen] Image loaded successfully for:', vehicle.name);
+                    }}
+                  />
+                ) : (
+                  <View className="w-full h-48 bg-gray-200 items-center justify-center">
+                    <SettingsGear size={48} color="#9CA3AF" />
+                    <Text className="text-gray-500 mt-2 text-sm">No Image</Text>
+                  </View>
+                )}
 
               <View className="p-4">
                 {/* Vehicle Header */}
@@ -353,7 +384,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToSettings, onNavigat
                 </View>
               </View>
             </View>
-          ))
+          );
+        })
         )}
       </ScrollView>
 

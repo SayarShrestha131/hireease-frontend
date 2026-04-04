@@ -253,8 +253,7 @@ export const BookingFormScreen: React.FC<BookingFormScreenProps> = ({
             [
               { text: 'Later', style: 'cancel' },
               { text: 'Complete KYC', onPress: () => {
-                // TODO: Navigate to KYC screen
-                console.log('Navigate to KYC screen');
+                onNavigateToKYC();
               }},
             ]
           );

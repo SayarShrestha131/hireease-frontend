@@ -32,6 +32,7 @@ import {
   XCircle,
   FileText,
   AlertCircle,
+  Camera,
 } from 'lucide-react-native';
 import kycService from '../../services/kycService';
 import { KYCSubmission, KYCStatus } from '../../types/kyc';
@@ -40,6 +41,7 @@ import { showError } from '../../utils/toast';
 interface KYCReviewListScreenProps {
   onNavigateBack: () => void;
   onNavigateToDetail: (submissionId: string) => void;
+  refreshKey?: number;
 }
 
 /**
@@ -48,6 +50,7 @@ interface KYCReviewListScreenProps {
 export const KYCReviewListScreen: React.FC<KYCReviewListScreenProps> = ({
   onNavigateBack,
   onNavigateToDetail,
+  refreshKey,
 }) => {
   // State
   const [submissions, setSubmissions] = useState<KYCSubmission[]>([]);
@@ -94,6 +97,13 @@ export const KYCReviewListScreen: React.FC<KYCReviewListScreenProps> = ({
     setHasMore(true);
     fetchSubmissions(1, true);
   }, [filter, debouncedSearch]);
+
+  useEffect(() => {
+    if (refreshKey === undefined) return;
+    setPage(1);
+    setHasMore(true);
+    fetchSubmissions(1, true);
+  }, [refreshKey]);
 
   /**
    * Fetch KYC submissions from API
@@ -263,6 +273,32 @@ export const KYCReviewListScreen: React.FC<KYCReviewListScreenProps> = ({
               {formatDate(item.submittedAt)}
             </Text>
           </View>
+
+          {(item.faceDecision || item.faceDetection) && (
+            <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
+              <View className="flex-row items-center">
+                <Camera size={14} color="#4B5563" />
+                <Text className="text-xs text-gray-600 ml-1">Face Match</Text>
+              </View>
+              <View
+                className={`px-2 py-1 rounded-full ${
+                  item.faceDecision?.matched || item.faceDetection?.isIdentityMatch
+                    ? 'bg-green-100'
+                    : 'bg-red-100'
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    item.faceDecision?.matched || item.faceDetection?.isIdentityMatch
+                      ? 'text-green-700'
+                      : 'text-red-700'
+                  }`}
+                >
+                  {item.faceDecision?.matched || item.faceDetection?.isIdentityMatch ? 'Matched' : 'Not Matched'}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );

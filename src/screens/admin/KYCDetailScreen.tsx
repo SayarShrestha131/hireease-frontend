@@ -42,6 +42,10 @@ import {
   X,
   AlertCircle,
   FileText,
+  Landmark,
+  Building,
+  MapPin,
+  Camera,
 } from 'lucide-react-native';
 import kycService from '../../services/kycService';
 import { KYCSubmission } from '../../types/kyc';
@@ -50,6 +54,7 @@ import { showSuccess, showError } from '../../utils/toast';
 
 interface KYCDetailScreenProps {
   submissionId: string;
+  onMutationComplete?: () => void;
   onNavigateBack: () => void;
 }
 
@@ -58,6 +63,7 @@ interface KYCDetailScreenProps {
  */
 export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
   submissionId,
+  onMutationComplete,
   onNavigateBack,
 }) => {
   // State
@@ -156,6 +162,7 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
       setActionLoading(true);
 
       await kycService.approveSubmission(submissionId, approvalNote || undefined);
+      onMutationComplete?.();
       
       setShowApproveModal(false);
       
@@ -192,6 +199,7 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
       setRejectionError('');
 
       await kycService.rejectSubmission(submissionId, rejectionReason.trim());
+      onMutationComplete?.();
       
       setShowRejectModal(false);
       
@@ -228,6 +236,7 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
       setRevocationError('');
 
       await kycService.revokeApprovedSubmission(submissionId, revocationReason.trim());
+      onMutationComplete?.();
       
       setShowRevokeModal(false);
       
@@ -353,6 +362,8 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
   // Get image URLs
   const frontImageUrl = kycService.getImageUrl(submission.licenseFrontImage);
   const backImageUrl = kycService.getImageUrl(submission.licenseBackImage);
+  const selfieImageUrl = kycService.getImageUrl(submission.selfieImage);
+  const faceScore = submission.faceDecision?.confidence ?? submission.faceDetection?.identityConfidence ?? submission.faceDetection?.confidence ?? 0;
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
@@ -414,7 +425,7 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
         {/* License Details Section */}
         <View className="bg-white rounded-lg p-4 mb-4 shadow-sm">
           <Text className="text-lg font-bold text-gray-800 mb-4">License Details</Text>
-          
+
           <View className="space-y-3">
             <View className="flex-row items-center">
               <CreditCard size={20} color="#6B7280" />
@@ -423,15 +434,23 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
                 <Text className="text-base font-medium text-gray-800">{submission.licenseNumber}</Text>
               </View>
             </View>
-            
+
             <View className="flex-row items-center">
               <User size={20} color="#6B7280" />
               <View className="ml-3 flex-1">
-                <Text className="text-xs text-gray-600 mb-1">Name on License</Text>
+                <Text className="text-xs text-gray-600 mb-1">Full Name</Text>
                 <Text className="text-base font-medium text-gray-800">{submission.fullName}</Text>
               </View>
             </View>
-            
+
+            <View className="flex-row items-center">
+              <User size={20} color="#6B7280" />
+              <View className="ml-3 flex-1">
+                <Text className="text-xs text-gray-600 mb-1">Father's Name</Text>
+                <Text className="text-base font-medium text-gray-800">{submission.fatherName || 'N/A'}</Text>
+              </View>
+            </View>
+
             <View className="flex-row items-center">
               <Calendar size={20} color="#6B7280" />
               <View className="ml-3 flex-1">
@@ -441,7 +460,7 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
                 </Text>
               </View>
             </View>
-            
+
             <View className="flex-row items-center">
               <Calendar size={20} color="#6B7280" />
               <View className="ml-3 flex-1">
@@ -451,8 +470,129 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
                 </Text>
               </View>
             </View>
+
+            {submission.issuedBy && (
+              <View className="flex-row items-center">
+                <Landmark size={20} color="#6B7280" />
+                <View className="ml-3 flex-1">
+                  <Text className="text-xs text-gray-600 mb-1">Issued By</Text>
+                  <Text className="text-base font-medium text-gray-800">{submission.issuedBy}</Text>
+                </View>
+              </View>
+            )}
+
+            {submission.licenseOffice && (
+              <View className="flex-row items-center">
+                <Building size={20} color="#6B7280" />
+                <View className="ml-3 flex-1">
+                  <Text className="text-xs text-gray-600 mb-1">License Office</Text>
+                  <Text className="text-base font-medium text-gray-800">{submission.licenseOffice}</Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
+
+        {/* Contact Information Section */}
+        {submission.fullAddress || submission.contactNumber ? (
+          <View className="bg-white rounded-lg p-4 mb-4 shadow-sm">
+            <Text className="text-lg font-bold text-gray-800 mb-4">Contact Information</Text>
+
+            <View className="space-y-3">
+              {submission.fullAddress && (
+                <View className="flex-row items-start">
+                  <MapPin size={20} color="#6B7280" className="mt-1" />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-xs text-gray-600 mb-1">Full Address</Text>
+                    <Text className="text-base font-medium text-gray-800">{submission.fullAddress}</Text>
+                  </View>
+                </View>
+              )}
+
+              {submission.contactNumber && (
+                <View className="flex-row items-center">
+                  <Phone size={20} color="#6B7280" />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-xs text-gray-600 mb-1">Contact Number</Text>
+                    <Text className="text-base font-medium text-gray-800">{submission.contactNumber}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Face Decision (Primary Admin Signal) */}
+        {(submission.faceDecision || submission.faceDetection) && (
+          <View className="bg-white rounded-lg p-4 mb-4 shadow-sm border-2 border-indigo-100">
+            <Text className="text-lg font-bold text-gray-800 mb-4">Face Decision</Text>
+            
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-sm font-medium text-gray-700">Match Confidence</Text>
+              <Text className={`text-2xl font-bold ${
+                faceScore >= 70 ? 'text-green-600' :
+                faceScore >= 50 ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {faceScore}%
+              </Text>
+            </View>
+
+            <View className="bg-gray-200 rounded-full h-3 mb-3">
+              <View
+                className={`h-3 rounded-full ${
+                  faceScore >= 70 ? 'bg-green-500' :
+                  faceScore >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${Math.max(0, Math.min(100, faceScore))}%` }}
+              />
+            </View>
+            
+            <View className={`rounded-lg p-3 ${
+              (submission.faceDecision?.matched || submission.faceDetection?.isIdentityMatch) ? 'bg-green-50' : 'bg-red-50'
+            }`}>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm font-medium text-gray-700">Match Result</Text>
+                {(submission.faceDecision?.matched || submission.faceDetection?.isIdentityMatch) ? (
+                  <CheckCircle size={18} color="#10B981" />
+                ) : (
+                  <XCircle size={18} color="#EF4444" />
+                )}
+                <Text className={`ml-2 text-sm font-bold ${
+                  (submission.faceDecision?.matched || submission.faceDetection?.isIdentityMatch) ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {(submission.faceDecision?.matched || submission.faceDetection?.isIdentityMatch) ? 'MATCHED' : 'NOT MATCHED'}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-3 bg-gray-50 rounded-lg p-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs text-gray-600">Decision Code</Text>
+                <Text className="text-xs font-semibold text-gray-800">
+                  {submission.faceDecision?.resultCode || (submission.faceDetection?.isIdentityMatch ? 'VERIFIED' : 'UNCERTAIN')}
+                </Text>
+              </View>
+              <Text className="text-xs text-gray-700 mt-2">
+                {submission.faceDecision?.reason || submission.faceDetection?.identityMessage || submission.faceDetection?.message}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Auto-Approval Badge */}
+        {submission.isAutoApproved && (
+          <View className="bg-green-100 rounded-lg p-4 mb-4 border-2 border-green-300">
+            <View className="flex-row items-center">
+              <CheckCircle size={24} color="#10B981" />
+              <View className="ml-3">
+                <Text className="text-base font-bold text-green-800">Auto-Approved</Text>
+                <Text className="text-sm text-green-700 mt-1">
+                  This submission was automatically approved based on high confidence scores (≥80% OCR, ≥70% Face, ≥75% Data Match)
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Submission Information Section */}
         <View className="bg-white rounded-lg p-4 mb-4 shadow-sm">
@@ -499,7 +639,7 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
 
         {/* License Images Section */}
         <View className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-800 mb-4">License Images</Text>
+          <Text className="text-lg font-bold text-gray-800 mb-4">Uploaded Images</Text>
           
           <View className="space-y-4">
             {/* Front Image */}
@@ -522,15 +662,39 @@ export const KYCDetailScreen: React.FC<KYCDetailScreenProps> = ({
             </View>
             
             {/* Back Image */}
+            {submission.licenseBackImage ? (
+              <View>
+                <Text className="text-sm font-medium text-gray-700 mb-2">Back of License</Text>
+                <TouchableOpacity
+                  onPress={() => handleImagePress(backImageUrl)}
+                  className="relative bg-gray-100 rounded-lg overflow-hidden"
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: backImageUrl }}
+                    className="w-full h-48"
+                    resizeMode="contain"
+                  />
+                  <View className="absolute top-2 right-2 bg-black/50 rounded-full p-2">
+                    <ZoomIn size={20} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Selfie Image */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">Back of License</Text>
+              <View className="flex-row items-center mb-2">
+                <Camera size={16} color="#374151" />
+                <Text className="text-sm font-medium text-gray-700 ml-2">Selfie (Face Verification)</Text>
+              </View>
               <TouchableOpacity
-                onPress={() => handleImagePress(backImageUrl)}
+                onPress={() => handleImagePress(selfieImageUrl)}
                 className="relative bg-gray-100 rounded-lg overflow-hidden"
                 activeOpacity={0.8}
               >
                 <Image
-                  source={{ uri: backImageUrl }}
+                  source={{ uri: selfieImageUrl }}
                   className="w-full h-48"
                   resizeMode="contain"
                 />

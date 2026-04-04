@@ -4,8 +4,8 @@
  * Main navigation with bottom tabs for authenticated users
  */
 
-import React, { useState } from 'react';
-import { View, TouchableOpacity, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, Text, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Home, Car, Calendar, User } from 'lucide-react-native';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -24,16 +24,21 @@ import { BookingFormScreen } from '../screens/BookingFormScreen';
 import { BookingConfirmationScreen } from '../screens/BookingConfirmationScreen';
 import { PaymentScreen } from '../screens/PaymentScreen';
 import { BookingSuccessScreen } from '../screens/BookingSuccessScreen';
+import { AdminRegisterPersonScreen } from '../screens/admin/AdminRegisterPersonScreen';
+import { UserVerifyScreen } from '../screens/UserVerifyScreen';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import kycService from '../services/kycService';
 import { Vehicle } from '../types/vehicle';
 import { AddOns, PriceBreakdown, Booking } from '../types/booking';
 
 type TabScreen = 'dashboard' | 'vehicles' | 'bookings' | 'profile';
-type SettingsScreenType = 'settings' | 'change-password' | 'api-config' | 'kyc-status' | 'kyc-submission';
-type AdminScreenType = 'kyc-review-list' | 'kyc-detail';
+type SettingsScreenType = 'settings' | 'change-password' | 'api-config' | 'kyc-status' | 'kyc-submission' | 'user-verify';
+type AdminScreenType = 'kyc-review-list' | 'kyc-detail' | 'admin-register-person';
 
 export const BottomTabNavigator: React.FC = () => {
   const { user } = useAuth();
+  const { setNavigateToVehicles } = useNotifications();
   const [activeTab, setActiveTab] = useState<TabScreen>('dashboard');
   const [settingsScreen, setSettingsScreen] = useState<SettingsScreenType>('settings');
   const [showSettings, setShowSettings] = useState(false);
@@ -45,6 +50,7 @@ export const BottomTabNavigator: React.FC = () => {
   const [showBookingSuccess, setShowBookingSuccess] = useState(false);
   const [adminScreen, setAdminScreen] = useState<AdminScreenType>('kyc-review-list');
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
+  const [kycAdminRefreshKey, setKycAdminRefreshKey] = useState(0);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [currentBooking, setCurrentBooking] = useState<Booking | null>(null);
@@ -57,6 +63,17 @@ export const BottomTabNavigator: React.FC = () => {
     addOns: AddOns;
     priceBreakdown: PriceBreakdown;
   } | null>(null);
+
+  // Set up navigation callback for notifications
+  useEffect(() => {
+    const navigateToVehiclesCallback = () => setActiveTab('vehicles');
+    setNavigateToVehicles(navigateToVehiclesCallback);
+    
+    // Cleanup on unmount
+    return () => {
+      setNavigateToVehicles(null);
+    };
+  }, []); // Empty dependency array to run only once
 
   const navigateToSettings = () => {
     setShowSettings(true);
@@ -76,14 +93,73 @@ export const BottomTabNavigator: React.FC = () => {
     setSettingsScreen('kyc-status');
   };
 
-  const navigateToKYCSubmission = () => {
+  const navigateToKYCSubmission = async () => {
+    try {
+      // Call API to check eligibility (Requirement 1.1, 1.2, 5.4, 5.5)
+      const eligibility = await kycService.checkKYCEligibility();
+      
+      // Check if profile picture is missing
+      if (!eligibility.hasProfilePicture) {
+        Alert.alert(
+          'Profile Picture Required',
+          'You must upload a profile picture before submitting KYC verification. This helps us verify your identity.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Upload Now',
+              onPress: () => {
+                // Navigate to profile screen
+                setActiveTab('profile');
+                setShowSettings(false);
+              },
+            },
+          ]
+        );
+        return;
+      }
+      
+      // Check if pending submission exists
+      if (eligibility.hasPendingSubmission) {
+        Alert.alert(
+          'Pending Submission Exists',
+          'You already have a pending KYC submission. Please wait for admin review before submitting again.',
+          [
+            {
+              text: 'View Status',
+              onPress: () => {
+                setShowSettings(true);
+                setSettingsScreen('kyc-status');
+              },
+            },
+            { text: 'OK', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+      
+      // User is eligible - show KYC submission form
+      setShowSettings(true);
+      setSettingsScreen('kyc-submission');
+    } catch (error) {
+      console.error('Error checking KYC eligibility:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check KYC eligibility';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const navigateToUserVerify = () => {
     setShowSettings(true);
-    setSettingsScreen('kyc-submission');
+    setSettingsScreen('user-verify');
   };
 
   const navigateToKYCReviewList = () => {
     setShowAdminScreen(true);
     setAdminScreen('kyc-review-list');
+  };
+
+  const navigateToAdminRegisterPerson = () => {
+    setShowAdminScreen(true);
+    setAdminScreen('admin-register-person');
   };
 
   const navigateToKYCDetail = (submissionId: string) => {
@@ -176,7 +252,7 @@ export const BottomTabNavigator: React.FC = () => {
   };
 
   const navigateBack = () => {
-    if (settingsScreen === 'change-password' || settingsScreen === 'kyc-submission') {
+    if (settingsScreen === 'change-password' || settingsScreen === 'kyc-submission' || settingsScreen === 'user-verify') {
       setSettingsScreen('settings');
     } else if (settingsScreen === 'kyc-status') {
       setSettingsScreen('settings');
@@ -186,12 +262,16 @@ export const BottomTabNavigator: React.FC = () => {
   };
 
   const navigateBackFromAdmin = () => {
-    if (adminScreen === 'kyc-detail') {
+    if (adminScreen === 'kyc-detail' || adminScreen === 'admin-register-person') {
       setAdminScreen('kyc-review-list');
     } else {
       setShowAdminScreen(false);
       setActiveTab('dashboard');
     }
+  };
+
+  const handleAdminKycMutationComplete = () => {
+    setKycAdminRefreshKey((k) => k + 1);
   };
 
   // Show booking detail screen
@@ -272,6 +352,7 @@ export const BottomTabNavigator: React.FC = () => {
       return (
         <KYCDetailScreen
           submissionId={selectedSubmissionId}
+          onMutationComplete={handleAdminKycMutationComplete}
           onNavigateBack={navigateBackFromAdmin}
         />
       );
@@ -281,8 +362,12 @@ export const BottomTabNavigator: React.FC = () => {
         <KYCReviewListScreen
           onNavigateToDetail={navigateToKYCDetail}
           onNavigateBack={navigateBackFromAdmin}
+          refreshKey={kycAdminRefreshKey}
         />
       );
+    }
+    if (adminScreen === 'admin-register-person') {
+      return <AdminRegisterPersonScreen onNavigateBack={navigateBackFromAdmin} />;
     }
   }
 
@@ -310,12 +395,16 @@ export const BottomTabNavigator: React.FC = () => {
         />
       );
     }
+    if (settingsScreen === 'user-verify') {
+      return <UserVerifyScreen onNavigateBack={navigateBack} />;
+    }
     return (
       <SettingsScreen
         onNavigateToChangePassword={navigateToChangePassword}
         onNavigateToProfile={navigateToProfile}
         onNavigateToApiConfig={navigateToApiConfig}
         onNavigateToKYCStatus={navigateToKYCStatus}
+        onNavigateToUserVerify={navigateToUserVerify}
         onNavigateBack={navigateBack}
       />
     );
@@ -367,7 +456,14 @@ export const BottomTabNavigator: React.FC = () => {
   return (
     <View className="flex-1">
       {/* Screen Content */}
-      {activeTab === 'dashboard' && <DashboardScreen onNavigateToKYCReview={navigateToKYCReviewList} />}
+      {activeTab === 'dashboard' && (
+        <DashboardScreen
+          onNavigateToKYCReview={navigateToKYCReviewList}
+          onNavigateToAdminRegisterPerson={navigateToAdminRegisterPerson}
+          onNavigateToVehicles={() => setActiveTab('vehicles')}
+          onNavigateToBookings={() => setActiveTab('bookings')}
+        />
+      )}
       {activeTab === 'vehicles' && (
         <HomeScreen 
           onNavigateToSettings={navigateToSettings}

@@ -13,6 +13,7 @@ import {
   PaginatedKYCResponse,
   KYCSubmissionResponse,
   KYCActionResponse,
+  KYCEligibility,
 } from '../types/kyc';
 import { AxiosError } from 'axios';
 
@@ -54,6 +55,30 @@ class KYCService {
       console.log('[KYC Service] ✅ KYC submitted successfully');
       return response.data.data.submission;
     }, 'submit KYC');
+  }
+
+  /**
+   * Check if user is eligible to submit KYC
+   * Verifies profile picture exists and no pending submission
+   * 
+   * @returns Promise resolving to eligibility status
+   * @throws Error with user-friendly message on failure
+   */
+  async checkKYCEligibility(): Promise<KYCEligibility> {
+    try {
+      console.log('[KYC Service] Checking KYC eligibility...');
+      
+      const response = await apiClient.get<{
+        success: boolean;
+        data: KYCEligibility;
+      }>('/kyc/eligibility');
+      
+      console.log('[KYC Service] ✅ KYC eligibility checked');
+      return response.data.data;
+    } catch (error) {
+      console.error('[KYC Service] ❌ Check KYC eligibility failed:', error);
+      throw this.handleError(error);
+    }
   }
 
   /**
@@ -248,6 +273,31 @@ class KYCService {
   }
 
   /**
+   * Resubmit KYC application after rejection (with 24-hour window check)
+   * @param data KYC form data
+   * @param previousSubmissionId ID of the rejected submission being resubmitted
+   * @returns Promise<KYCSubmission>
+   */
+  async resubmitKYC(data: KYCFormData, previousSubmissionId: string): Promise<KYCSubmission> {
+    console.log('[KYC Service] Resubmitting KYC application...');
+    
+    // Add the previous submission ID to the data
+    const resubmissionData = {
+      ...data,
+      previousSubmissionId
+    };
+    
+    try {
+      const result = await this.submitKYC(resubmissionData);
+      console.log('[KYC Service] ✅ KYC resubmitted successfully');
+      return result;
+    } catch (error) {
+      console.error('[KYC Service] ❌ KYC resubmission failed:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * Construct image URL for admin viewing
    * 
    * @param filename - Image filename stored in the database
@@ -261,25 +311,39 @@ class KYCService {
 
   /**
    * Create FormData object for multipart upload
-   * 
+   *
    * @param data - KYC form data
    * @returns FormData object ready for upload
    * @private
    */
   private createFormData(data: KYCFormData): FormData {
     const formData = new FormData();
-    
+
     // Add text fields
     formData.append('licenseNumber', data.licenseNumber);
     formData.append('fullName', data.fullName);
     formData.append('dateOfBirth', data.dateOfBirth.toISOString().split('T')[0]);
     formData.append('licenseExpiryDate', data.licenseExpiryDate.toISOString().split('T')[0]);
-    
+
+    // Add optional fields
+    if (data.fatherName) {
+      formData.append('fatherName', data.fatherName);
+    }
+
+    if (data.licenseIssueDate) {
+      formData.append('licenseIssueDate', data.licenseIssueDate.toISOString().split('T')[0]);
+    }
+
+    formData.append('issuedBy', data.issuedBy);
+    formData.append('licenseOffice', data.licenseOffice);
+    formData.append('address', data.address);
+    formData.append('contactNumber', data.contactNumber);
+
     // Add previous submission ID if resubmitting
     if (data.previousSubmissionId) {
       formData.append('previousSubmissionId', data.previousSubmissionId);
     }
-    
+
     // Add license front image (REQUIRED)
     if (data.licenseFrontImage) {
       formData.append('licenseFrontImage', {
@@ -288,7 +352,7 @@ class KYCService {
         type: data.licenseFrontImage.type,
       } as any);
     }
-    
+
     // Add license back image (OPTIONAL)
     if (data.licenseBackImage) {
       formData.append('licenseBackImage', {
@@ -297,7 +361,7 @@ class KYCService {
         type: data.licenseBackImage.type,
       } as any);
     }
-    
+
     // Add selfie image (REQUIRED)
     if (data.selfieImage) {
       formData.append('selfieImage', {
@@ -306,7 +370,7 @@ class KYCService {
         type: data.selfieImage.type,
       } as any);
     }
-    
+
     return formData;
   }
 

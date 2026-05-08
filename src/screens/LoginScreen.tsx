@@ -43,6 +43,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const { login, loading, error, clearError } = useAuth();
 
   /**
+   * Clear any existing errors when component mounts
+   * This ensures session expiration messages don't persist
+   */
+  React.useEffect(() => {
+    clearError();
+  }, []);
+
+  /**
    * Handle email input change
    * Clears errors when user starts typing
    */

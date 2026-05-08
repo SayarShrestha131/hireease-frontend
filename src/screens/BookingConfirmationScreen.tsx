@@ -21,7 +21,6 @@ import { Vehicle } from '../types/vehicle';
 import { AddOns, PriceBreakdown, Booking } from '../types/booking';
 import { ErrorDisplay, KYCVerificationModal, AvailabilityConflictAlert } from '../components';
 import { useBookingErrorHandler } from '../hooks/useBookingErrorHandler';
-import { showError } from '../utils/toast';
 import { retryOperation } from '../utils/retry';
 
 interface BookingConfirmationScreenProps {
@@ -36,12 +35,12 @@ interface BookingConfirmationScreenProps {
       priceBreakdown: PriceBreakdown;
     };
   };
-  onNavigateToPayment: (booking: Booking) => void;
+  onNavigateToPayment: (booking: Booking, paymentMethod: 'esewa') => void;
   onNavigateToKYC: () => void;
   onNavigateBack: () => void;
 }
 
-export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps> = ({
+const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps> = ({
   route,
   onNavigateToPayment,
   onNavigateToKYC,
@@ -105,12 +104,14 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
         cost: addOnRates.helmet * priceBreakdown.duration,
       });
     }
+
     if (addOns.gps) {
       selected.push({
         name: 'GPS Navigation',
         cost: addOnRates.gps * priceBreakdown.duration,
       });
     }
+
     if (addOns.insurance) {
       selected.push({
         name: 'Insurance Coverage',
@@ -122,7 +123,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
   };
 
   /**
-   * Handle booking creation
+   * Handle booking creation and proceed to payment
    */
   const handleCreateBooking = async () => {
     // Clear previous errors
@@ -143,24 +144,25 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
     try {
       // Use retry mechanism for network resilience
       const booking = await retryOperation(
-        () => bookingService.createBooking({
-          vehicleId: vehicle._id,
-          pickupDate: formatDateForAPI(pickupDate),
-          pickupTime,
-          dropoffDate: formatDateForAPI(dropoffDate),
-          dropoffTime,
-          addOns,
-        }),
+        () =>
+          bookingService.createBooking({
+            vehicleId: vehicle._id,
+            pickupDate: formatDateForAPI(pickupDate),
+            pickupTime,
+            dropoffDate: formatDateForAPI(dropoffDate),
+            dropoffTime,
+            addOns,
+          }),
         {
           maxRetries: 2,
           onRetry: (attempt) => {
             console.log(`Retrying booking creation (attempt ${attempt})...`);
-          }
+          },
         }
       );
 
-      // Navigate to payment screen
-      onNavigateToPayment(booking);
+      // Navigate to payment screen with eSewa as the only payment method
+      onNavigateToPayment(booking, 'esewa');
     } catch (err) {
       console.error('Booking creation error:', err);
       // Use error handler to show appropriate UI feedback
@@ -213,7 +215,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
         {/* Vehicle Details */}
         <View className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
           <Text className="text-lg font-semibold text-gray-900 mb-3">Vehicle Details</Text>
-
+          
           {vehicleImage && (
             <Image
               source={{ uri: vehicleImage }}
@@ -221,10 +223,10 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
               resizeMode="cover"
             />
           )}
-
+          
           <Text className="text-xl font-bold text-gray-900 mb-1">{vehicle.name}</Text>
           <Text className="text-base text-gray-600 mb-3">
-            {vehicle.brand} {vehicle.model} • {vehicle.year}
+            {vehicle.brand} {vehicle.vehicleModel} • {vehicle.year}
           </Text>
 
           {/* Specifications */}
@@ -237,28 +239,33 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
                     <Text className="text-sm text-gray-900">{vehicle.specifications.engine}</Text>
                   </View>
                 )}
+                
                 {vehicle.specifications.power && (
                   <View className="w-1/2 mb-2">
                     <Text className="text-xs text-gray-500">Power</Text>
                     <Text className="text-sm text-gray-900">{vehicle.specifications.power}</Text>
                   </View>
                 )}
+                
                 {vehicle.specifications.mileage && (
                   <View className="w-1/2 mb-2">
                     <Text className="text-xs text-gray-500">Mileage</Text>
                     <Text className="text-sm text-gray-900">{vehicle.specifications.mileage}</Text>
                   </View>
                 )}
+                
                 {vehicle.specifications.color && (
                   <View className="w-1/2 mb-2">
                     <Text className="text-xs text-gray-500">Color</Text>
                     <Text className="text-sm text-gray-900">{vehicle.specifications.color}</Text>
                   </View>
                 )}
+                
                 <View className="w-1/2 mb-2">
                   <Text className="text-xs text-gray-500">Transmission</Text>
                   <Text className="text-sm text-gray-900 capitalize">{vehicle.transmission}</Text>
                 </View>
+                
                 <View className="w-1/2 mb-2">
                   <Text className="text-xs text-gray-500">Seats</Text>
                   <Text className="text-sm text-gray-900">{vehicle.seats}</Text>
@@ -271,7 +278,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
         {/* Rental Period */}
         <View className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
           <Text className="text-lg font-semibold text-gray-900 mb-3">Rental Period</Text>
-
+          
           {/* Pickup */}
           <View className="flex-row items-start mb-3">
             <View className="bg-green-100 rounded-full p-2 mr-3">
@@ -279,9 +286,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
             </View>
             <View className="flex-1">
               <Text className="text-sm text-gray-500 mb-1">Pickup</Text>
-              <Text className="text-base font-semibold text-gray-900">
-                {formatDate(pickupDate)}
-              </Text>
+              <Text className="text-base font-semibold text-gray-900">{formatDate(pickupDate)}</Text>
               <View className="flex-row items-center mt-1">
                 <Clock size={14} color="#6B7280" />
                 <Text className="text-sm text-gray-600 ml-1">{pickupTime}</Text>
@@ -296,9 +301,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
             </View>
             <View className="flex-1">
               <Text className="text-sm text-gray-500 mb-1">Dropoff</Text>
-              <Text className="text-base font-semibold text-gray-900">
-                {formatDate(dropoffDate)}
-              </Text>
+              <Text className="text-base font-semibold text-gray-900">{formatDate(dropoffDate)}</Text>
               <View className="flex-row items-center mt-1">
                 <Clock size={14} color="#6B7280" />
                 <Text className="text-sm text-gray-600 ml-1">{dropoffTime}</Text>
@@ -341,7 +344,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
         {/* Price Breakdown */}
         <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <Text className="text-lg font-semibold text-gray-900 mb-3">Price Breakdown</Text>
-
+          
           <View className="flex-row justify-between mb-2">
             <Text className="text-gray-600">
               Base Price ({priceBreakdown.duration} {priceBreakdown.duration === 1 ? 'day' : 'days'})
@@ -352,9 +355,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
           {priceBreakdown.durationDiscount > 0 && (
             <View className="flex-row justify-between mb-2">
               <Text className="text-green-600">Duration Discount</Text>
-              <Text className="text-green-600">
-                - Rs. {priceBreakdown.durationDiscount.toFixed(2)}
-              </Text>
+              <Text className="text-green-600">- Rs. {priceBreakdown.durationDiscount.toFixed(2)}</Text>
             </View>
           )}
 
@@ -405,21 +406,21 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
           </Text>
         </TouchableOpacity>
 
-        {/* Confirm Booking Button */}
+        {/* Proceed to Payment Button */}
         <TouchableOpacity
           className={`rounded-lg py-4 items-center mb-4 ${
-            isCreatingBooking || !termsAccepted ? 'bg-gray-400' : 'bg-[#0096c7]'
+            isCreatingBooking || !termsAccepted ? 'bg-gray-400' : 'bg-[#60BB46]'
           }`}
           onPress={handleCreateBooking}
           disabled={isCreatingBooking || !termsAccepted}
         >
           {isCreatingBooking ? (
             <View className="flex-row items-center">
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color="#FFFFFF" size="small" />
               <Text className="text-white text-base font-semibold ml-2">Creating Booking...</Text>
             </View>
           ) : (
-            <Text className="text-white text-base font-semibold">Confirm & Proceed to Payment</Text>
+            <Text className="text-white text-base font-semibold">Proceed to eSewa Payment</Text>
           )}
         </TouchableOpacity>
 
@@ -450,3 +451,5 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
     </ScrollView>
   );
 };
+
+export default BookingConfirmationScreen;

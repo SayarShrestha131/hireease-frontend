@@ -58,6 +58,8 @@ const getApiClient = (): AxiosInstance => {
       timeout: 15000,
       headers: {
         'Content-Type': 'application/json',
+        // Add ngrok header if using ngrok URL
+        ...(baseURL.includes('ngrok') && { 'ngrok-skip-browser-warning': 'true' }),
       },
     });
     
@@ -72,6 +74,11 @@ const getApiClient = (): AxiosInstance => {
           const token = await AsyncStorage.getItem(TOKEN_KEY);
           if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
+          }
+          
+          // Add ngrok header for all requests if using ngrok URL
+          if (config.baseURL?.includes('ngrok') && config.headers) {
+            config.headers['ngrok-skip-browser-warning'] = 'true';
           }
         } catch (error) {
           console.error('🔴 [apiClient] Error retrieving token:', error);
@@ -96,6 +103,12 @@ const getApiClient = (): AxiosInstance => {
         return response;
       },
       async (error: AxiosError) => {
+        // Handle network errors
+        if (!error.response) {
+          console.error('🔴 [apiClient] Network error:', error.message);
+          // You can add retry logic here if needed
+        }
+        
         if (error.response && error.response.status === 401) {
           try {
             await AsyncStorage.removeItem(TOKEN_KEY);

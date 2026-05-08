@@ -5,13 +5,15 @@
  * Provides navigation options to view booking details, bookings list, or return home.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   Image,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import {
   CheckCircle,
@@ -21,8 +23,10 @@ import {
   Home,
   FileText,
   List,
+  Download,
 } from 'lucide-react-native';
 import { Booking } from '../types/booking';
+import paymentService from '../services/paymentService';
 
 interface BookingSuccessScreenProps {
   route: {
@@ -42,6 +46,58 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
   onNavigateToHome,
 }) => {
   const { booking } = route.params;
+
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
+
+  /**
+   * Fetch receipt on mount if payment is completed
+   * Note: Receipts are available for completed Khalti payments
+   */
+  useEffect(() => {
+    // Fetch receipt if payment is completed
+    if (booking.paymentStatus === 'completed') {
+      fetchReceipt();
+    }
+  }, [booking._id, booking.paymentStatus]);
+
+  /**
+   * Fetch receipt from API
+   */
+  const fetchReceipt = async () => {
+    try {
+      setLoadingReceipt(true);
+      const response = await paymentService.getReceipt(booking.bookingId);
+      setReceiptUrl(response.data.receiptUrl);
+    } catch (error: any) {
+      console.error('Failed to fetch receipt:', error);
+      // Don't show error to user - receipt is optional
+      // The button simply won't appear if receipt can't be fetched
+      if (error.response?.status === 401) {
+        console.log('Authentication required for receipt - user may need to log in again');
+      } else if (error.response?.status === 404) {
+        console.log('Receipt not yet available for this booking');
+      }
+    } finally {
+      setLoadingReceipt(false);
+    }
+  };
+
+  /**
+   * Handle receipt download
+   */
+  const handleDownloadReceipt = async () => {
+    if (receiptUrl) {
+      try {
+        const supported = await Linking.canOpenURL(receiptUrl);
+        if (supported) {
+          await Linking.openURL(receiptUrl);
+        }
+      } catch (error) {
+        console.error('Failed to open receipt:', error);
+      }
+    }
+  };
 
   /**
    * Format date to display string (DD MMM YYYY)
@@ -116,7 +172,7 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
                 {booking.vehicle.name}
               </Text>
               <Text className="text-base text-gray-600">
-                {booking.vehicle.brand} {booking.vehicle.model}
+                {booking.vehicle.brand} {booking.vehicle.vehicleModel}
               </Text>
             </View>
           )}
@@ -194,20 +250,56 @@ export const BookingSuccessScreen: React.FC<BookingSuccessScreenProps> = ({
           </View>
 
           {/* Payment Status */}
-          <View className="bg-green-50 rounded-lg p-3 mt-3">
+          <View className={`rounded-lg p-3 mt-3 ${
+            booking.paymentStatus === 'completed' ? 'bg-green-50' : 
+            booking.paymentStatus === 'pending' ? 'bg-yellow-50' : 'bg-red-50'
+          }`}>
             <View className="flex-row items-center justify-center">
-              <CheckCircle size={16} color="#059669" />
-              <Text className="text-green-700 font-semibold ml-2">
-                Payment Completed
+              <CheckCircle size={16} color={
+                booking.paymentStatus === 'completed' ? '#059669' :
+                booking.paymentStatus === 'pending' ? '#D97706' : '#DC2626'
+              } />
+              <Text className={`font-semibold ml-2 ${
+                booking.paymentStatus === 'completed' ? 'text-green-700' :
+                booking.paymentStatus === 'pending' ? 'text-yellow-700' : 'text-red-700'
+              }`}>
+                {booking.paymentStatus === 'completed' ? 'Payment Completed' :
+                 booking.paymentStatus === 'pending' ? 'Payment Pending' :
+                 booking.paymentStatus === 'failed' ? 'Payment Failed' : 'Payment Status Unknown'}
               </Text>
             </View>
             {booking.paymentMethod && (
-              <Text className="text-green-600 text-sm text-center mt-1">
+              <Text className={`text-sm text-center mt-1 ${
+                booking.paymentStatus === 'completed' ? 'text-green-600' :
+                booking.paymentStatus === 'pending' ? 'text-yellow-600' : 'text-red-600'
+              }`}>
                 via {booking.paymentMethod}
               </Text>
             )}
           </View>
         </View>
+
+        {/* Receipt Download Button */}
+        {booking.paymentStatus === 'completed' && (
+          <View className="mb-6">
+            {loadingReceipt ? (
+              <View className="bg-gray-100 rounded-lg py-4 items-center">
+                <ActivityIndicator size="small" color="#0096c7" />
+                <Text className="text-gray-600 text-sm mt-2">Loading receipt...</Text>
+              </View>
+            ) : receiptUrl ? (
+              <TouchableOpacity
+                className="bg-white border-2 border-[#0096c7] rounded-lg py-4 items-center flex-row justify-center"
+                onPress={handleDownloadReceipt}
+              >
+                <Download size={20} color="#0096c7" />
+                <Text className="text-[#0096c7] text-base font-semibold ml-2">
+                  Download Receipt
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
 
         {/* Action Buttons */}
         <View className="mb-6">

@@ -317,6 +317,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// Add displayName for debugging
+AuthProvider.displayName = 'AuthProvider';
+
 /**
  * Custom hook to access authentication context
  * @throws Error if used outside of AuthProvider

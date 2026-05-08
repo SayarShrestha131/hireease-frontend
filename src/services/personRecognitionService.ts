@@ -4,7 +4,7 @@
  */
 
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from '../config/api';
+import { getCurrentApiUrl } from '../config/api';
 
 export interface RegisterPersonData {
   fullName: string;
@@ -41,7 +41,7 @@ export const registerPerson = async (data: RegisterPersonData, photoUri: string)
       name: 'photo.jpg',
     } as any);
 
-    const response = await fetch(`${API_URL}/registered-persons/register`, {
+    const response = await fetch(`${getCurrentApiUrl()}/registered-persons/register`, {
       method: 'POST',
       body: formData,
     });
@@ -68,7 +68,7 @@ export const verifyPerson = async (licenseNumber: string, photoUri: string) => {
       name: 'verify.jpg',
     } as any);
 
-    const response = await fetch(`${API_URL}/registered-persons/verify`, {
+    const response = await fetch(`${getCurrentApiUrl()}/registered-persons/verify`, {
       method: 'POST',
       body: formData,
     });
@@ -94,7 +94,7 @@ export const identifyPerson = async (photoUri: string) => {
       name: 'identify.jpg',
     } as any);
 
-    const response = await fetch(`${API_URL}/registered-persons/identify`, {
+    const response = await fetch(`${getCurrentApiUrl()}/registered-persons/identify`, {
       method: 'POST',
       body: formData,
     });
@@ -112,7 +112,7 @@ export const identifyPerson = async (photoUri: string) => {
  */
 export const getAllPersons = async () => {
   try {
-    const response = await fetch(`${API_URL}/registered-persons`);
+    const response = await fetch(`${getCurrentApiUrl()}/registered-persons`);
     const result = await response.json();
     return result;
   } catch (error) {

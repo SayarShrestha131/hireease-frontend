@@ -57,6 +57,7 @@ export interface User {
   role: 'user' | 'admin';
   username?: string;
   dateOfBirth?: string;
+  profilePicture?: string;
   contactInfo?: ContactInfo;
   emergencyContacts?: EmergencyContact[];
   notificationPreferences?: NotificationPreferences;

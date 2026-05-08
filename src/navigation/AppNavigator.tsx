@@ -196,3 +196,6 @@ export const AppNavigator: React.FC = () => {
     />
   );
 };
+
+// Add displayName for debugging
+AppNavigator.displayName = 'AppNavigator';

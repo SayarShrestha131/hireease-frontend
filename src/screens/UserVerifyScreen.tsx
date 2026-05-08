@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config/api';
+import { getCurrentApiUrl } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
@@ -25,7 +25,7 @@ interface Props {
 }
 
 export const UserVerifyScreen: React.FC<Props> = ({ onNavigateBack }) => {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [licenseNumber, setLicenseNumber] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,7 +66,8 @@ export const UserVerifyScreen: React.FC<Props> = ({ onNavigateBack }) => {
     result: 'VERIFIED' | 'UNCERTAIN' | 'REJECTED' | 'ERROR';
   }) => {
     try {
-      await fetch(`${API_URL}/registered-persons/verify-attempts`, {
+      const token = await AsyncStorage.getItem('auth_token');
+      await fetch(`${getCurrentApiUrl()}/registered-persons/verify-attempts`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -141,7 +142,8 @@ export const UserVerifyScreen: React.FC<Props> = ({ onNavigateBack }) => {
         name: 'verify.jpg',
       } as any);
 
-      const response = await fetch(`${API_URL}/registered-persons/verify`, {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${getCurrentApiUrl()}/registered-persons/verify`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

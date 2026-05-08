@@ -176,6 +176,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   );
 };
 
+// Add displayName for debugging
+NotificationProvider.displayName = 'NotificationProvider';
+
 export const useNotifications = (): NotificationContextType => {
   const context = useContext(NotificationContext);
   

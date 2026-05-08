@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, Text, Alert } from 'react-native';
+import { View, TouchableOpacity, Text, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Home, Car, Calendar, User } from 'lucide-react-native';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -18,14 +18,16 @@ import { KYCSubmissionScreen } from '../screens/KYCSubmissionScreen';
 import { KYCStatusScreen } from '../screens/KYCStatusScreen';
 import { KYCReviewListScreen } from '../screens/admin/KYCReviewListScreen';
 import { KYCDetailScreen } from '../screens/admin/KYCDetailScreen';
-import { MyBookingsScreen } from '../screens/MyBookingsScreen';
+import MyBookingsScreen from '../screens/MyBookingsScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
 import { BookingFormScreen } from '../screens/BookingFormScreen';
-import { BookingConfirmationScreen } from '../screens/BookingConfirmationScreen';
+import BookingConfirmationScreen from '../screens/BookingConfirmationScreen';
 import { PaymentScreen } from '../screens/PaymentScreen';
+import { PaymentVerificationScreen } from '../screens/PaymentVerificationScreen';
 import { BookingSuccessScreen } from '../screens/BookingSuccessScreen';
 import { AdminRegisterPersonScreen } from '../screens/admin/AdminRegisterPersonScreen';
 import { UserVerifyScreen } from '../screens/UserVerifyScreen';
+import RentalHistoryScreen from '../screens/RentalHistoryScreen';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import kycService from '../services/kycService';
@@ -47,13 +49,16 @@ export const BottomTabNavigator: React.FC = () => {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showPaymentVerification, setShowPaymentVerification] = useState(false);
   const [showBookingSuccess, setShowBookingSuccess] = useState(false);
+  const [showRentalHistory, setShowRentalHistory] = useState(false);
   const [adminScreen, setAdminScreen] = useState<AdminScreenType>('kyc-review-list');
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [kycAdminRefreshKey, setKycAdminRefreshKey] = useState(0);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [currentBooking, setCurrentBooking] = useState<Booking | null>(null);
+  const [paymentVerificationParams, setPaymentVerificationParams] = useState<any>(null);
   const [bookingFormData, setBookingFormData] = useState<{
     vehicle: Vehicle;
     pickupDate: Date;
@@ -74,6 +79,52 @@ export const BottomTabNavigator: React.FC = () => {
       setNavigateToVehicles(null);
     };
   }, []); // Empty dependency array to run only once
+
+  // Set up deep link listener for Khalti payment return
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      console.log('🔗 [BottomTabNavigator] Deep link received:', event.url);
+      
+      // Parse the URL
+      const url = event.url;
+      
+      // Check if it's a payment verification link
+      if (url.includes('payment/verify')) {
+        try {
+          // Extract query parameters
+          const urlObj = new URL(url);
+          const params: any = {};
+          
+          urlObj.searchParams.forEach((value, key) => {
+            params[key] = value;
+          });
+          
+          console.log('💳 [BottomTabNavigator] Payment verification params:', params);
+          
+          // Navigate to payment verification screen
+          setPaymentVerificationParams(params);
+          setShowPaymentVerification(true);
+        } catch (error) {
+          console.error('❌ [BottomTabNavigator] Error parsing deep link:', error);
+        }
+      }
+    };
+
+    // Listen for deep links
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // Check if app was opened with a deep link
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('🔗 [BottomTabNavigator] Initial URL:', url);
+        handleDeepLink({ url });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const navigateToSettings = () => {
     setShowSettings(true);
@@ -162,6 +213,10 @@ export const BottomTabNavigator: React.FC = () => {
     setAdminScreen('admin-register-person');
   };
 
+  const navigateToRentalHistory = () => {
+    setShowRentalHistory(true);
+  };
+
   const navigateToKYCDetail = (submissionId: string) => {
     setShowAdminScreen(true);
     setAdminScreen('kyc-detail');
@@ -226,7 +281,20 @@ export const BottomTabNavigator: React.FC = () => {
   const navigateToBookingSuccess = (booking: Booking) => {
     setCurrentBooking(booking);
     setShowPayment(false);
+    setShowPaymentVerification(false);
     setShowBookingSuccess(true);
+  };
+
+  const navigateToBookingSuccessById = (bookingId: string) => {
+    setShowPaymentVerification(false);
+    setSelectedBookingId(bookingId);
+    setShowBookingDetail(true);
+  };
+
+  const navigateToHomeFromVerification = () => {
+    setShowPaymentVerification(false);
+    setPaymentVerificationParams(null);
+    setActiveTab('vehicles');
   };
 
   const navigateFromSuccessToBookingDetail = (bookingId: string) => {
@@ -274,6 +342,19 @@ export const BottomTabNavigator: React.FC = () => {
     setKycAdminRefreshKey((k) => k + 1);
   };
 
+  // Show payment verification screen
+  if (showPaymentVerification && paymentVerificationParams) {
+    return (
+      <PaymentVerificationScreen
+        route={{
+          params: paymentVerificationParams,
+        }}
+        onNavigateToBookingSuccess={navigateToBookingSuccessById}
+        onNavigateToHome={navigateToHomeFromVerification}
+      />
+    );
+  }
+
   // Show booking detail screen
   if (showBookingDetail && selectedBookingId) {
     return (
@@ -311,6 +392,16 @@ export const BottomTabNavigator: React.FC = () => {
         onNavigateToPayment={navigateToPayment}
         onNavigateToKYC={navigateToKYCSubmission}
         onNavigateBack={navigateBackFromBookingConfirmation}
+      />
+    );
+  }
+
+  // Show rental history screen
+  if (showRentalHistory) {
+    return (
+      <RentalHistoryScreen
+        onNavigateBack={() => setShowRentalHistory(false)}
+        onNavigateToDetail={navigateToBookingDetail}
       />
     );
   }
@@ -462,6 +553,7 @@ export const BottomTabNavigator: React.FC = () => {
           onNavigateToAdminRegisterPerson={navigateToAdminRegisterPerson}
           onNavigateToVehicles={() => setActiveTab('vehicles')}
           onNavigateToBookings={() => setActiveTab('bookings')}
+          onNavigateToRentalHistory={navigateToRentalHistory}
         />
       )}
       {activeTab === 'vehicles' && (
@@ -490,14 +582,16 @@ interface TabButtonProps {
   onPress: () => void;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ icon: Icon, label, active, onPress }) => {
+const TabButton: React.FC<TabButtonProps> = ({ icon, label, active, onPress }) => {
+  const IconComponent = icon;
+  
   return (
     <TouchableOpacity
       onPress={onPress}
       className="flex-1 items-center justify-center py-3"
       activeOpacity={0.7}
     >
-      <Icon size={24} color={active ? '#0096c7' : '#9CA3AF'} />
+      <IconComponent size={24} color={active ? '#0096c7' : '#9CA3AF'} />
       <Text
         className={`text-xs mt-1 ${active ? 'text-[#0096c7] font-semibold' : 'text-gray-500'}`}
       >

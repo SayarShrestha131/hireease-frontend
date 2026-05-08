@@ -14,6 +14,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import {
   CreditCard,
@@ -22,7 +23,9 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import bookingService from '../services/bookingService';
+import paymentService from '../services/paymentService';
 import { Booking, PaymentMethod } from '../types/booking';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { showError, showSuccess } from '../utils/toast';
@@ -56,40 +59,20 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   const { booking } = route.params;
 
   // UI state
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('Direct');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('esewa');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
    * Payment method options with icons and descriptions
+   * Currently only eSewa payment is available
    */
   const paymentMethods: PaymentMethodOption[] = [
     {
-      id: 'eSewa',
+      id: 'esewa',
       name: 'eSewa',
-      description: 'Pay securely with eSewa wallet',
-      icon: <Wallet size={24} color="#60A917" />,
-      available: true,
-    },
-    {
-      id: 'Khalti',
-      name: 'Khalti',
-      description: 'Pay securely with Khalti wallet',
-      icon: <Wallet size={24} color="#5D2E8E" />,
-      available: true,
-    },
-    {
-      id: 'Card',
-      name: 'Credit/Debit Card',
-      description: 'Pay with Visa, Mastercard, or other cards',
-      icon: <CreditCard size={24} color="#0096c7" />,
-      available: true,
-    },
-    {
-      id: 'Direct',
-      name: 'Direct Payment',
-      description: 'Pay directly at our office',
-      icon: <Building2 size={24} color="#6B7280" />,
+      description: 'Pay securely with eSewa digital wallet',
+      icon: <Wallet size={24} color="#60BB46" />,
       available: true,
     },
   ];
@@ -126,7 +109,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   };
 
   /**
-   * Handle payment confirmation
+   * Handle payment confirmation - Initiate eSewa payment
    */
   const handleConfirmPayment = async () => {
     // Clear previous errors
@@ -134,31 +117,66 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
 
     // Show confirmation dialog
     Alert.alert(
-      'Confirm Payment',
-      `Are you sure you want to proceed with payment of Rs. ${booking.priceBreakdown.totalPrice.toFixed(2)} via ${selectedPaymentMethod}?`,
+      'Proceed to eSewa Payment',
+      `You will be redirected to eSewa to complete payment of Rs. ${booking.priceBreakdown.totalPrice.toFixed(2)}`,
       [
         {
           text: 'Cancel',
           style: 'cancel',
         },
         {
-          text: 'Confirm',
+          text: 'Continue',
           onPress: async () => {
             setIsProcessing(true);
 
             try {
-              const updatedBooking = await bookingService.confirmPayment(booking._id, {
-                paymentMethod: selectedPaymentMethod,
-                paymentId: `${selectedPaymentMethod.toUpperCase()}-${Date.now()}`, // Mock payment ID
+              console.log('💳 [PaymentScreen] Initiating payment for booking:', booking.bookingId);
+              console.log('📋 [PaymentScreen] Booking details:', {
+                bookingId: booking.bookingId,
+                _id: booking._id,
+                totalPrice: booking.priceBreakdown.totalPrice,
               });
 
-              showSuccess('Payment confirmed successfully!');
-              
-              // Navigate to success screen
-              onNavigateToSuccess(updatedBooking);
+              // Initiate payment with eSewa using bookingId (not _id)
+              const response = await paymentService.initiatePayment({
+                bookingId: booking.bookingId, // Use bookingId (e.g., "BK-20260502-4862")
+                paymentMethod: 'esewa',
+                returnUrl: 'myapp://payment/verify', // Deep link for return
+              });
+
+              console.log('✅ [PaymentScreen] Payment initiated:', response);
+
+              if (response.success && response.data) {
+                // Store transaction ID and bookingId for verification later
+                await AsyncStorage.setItem('pendingTransactionId', response.data.transactionId);
+                await AsyncStorage.setItem('pendingBookingId', booking.bookingId); // Store bookingId
+
+                console.log('💾 [PaymentScreen] Stored transaction data');
+
+                // Open eSewa payment URL
+                const canOpen = await Linking.canOpenURL(response.data.paymentUrl);
+                
+                if (canOpen) {
+                  console.log('🌐 [PaymentScreen] Opening eSewa URL:', response.data.paymentUrl);
+                  await Linking.openURL(response.data.paymentUrl);
+                  
+                  showSuccess('Redirecting to eSewa...');
+                  
+                  // Show info to user
+                  Alert.alert(
+                    'Complete Payment on eSewa',
+                    'You will be redirected back to the app after payment completion.',
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  throw new Error('Cannot open eSewa payment page');
+                }
+              } else {
+                throw new Error(response.error || 'Failed to initiate payment');
+              }
             } catch (error) {
-              console.error('Payment confirmation error:', error);
-              const errorMessage = error instanceof Error ? error.message : 'Failed to confirm payment';
+              console.error('❌ [PaymentScreen] Payment initiation error:', error);
+              const errorMessage = error instanceof Error ? error.message : 'Failed to initiate payment';
               setError(errorMessage);
               showError(errorMessage);
             } finally {
@@ -309,12 +327,17 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         </View>
 
         {/* Payment Info Notice */}
-        <View className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 flex-row">
-          <AlertCircle size={20} color="#D97706" />
+        <View className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex-row">
+          <AlertCircle size={20} color="#60BB46" />
           <View className="flex-1 ml-3">
-            <Text className="text-yellow-800 text-sm">
-              This is a simplified payment flow for MVP. In production, you will be redirected to
-              the payment gateway for secure payment processing.
+            <Text className="text-green-800 text-sm font-semibold mb-1">
+              eSewa Payment Information
+            </Text>
+            <Text className="text-green-700 text-sm">
+              You will be redirected to eSewa's secure payment page. Use your eSewa ID and password to complete the payment.
+            </Text>
+            <Text className="text-green-600 text-xs mt-2">
+              Test credentials: eSewa ID: 9806800001, Password: Nepal@123, MPIN: 1234
             </Text>
           </View>
         </View>
@@ -322,7 +345,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         {/* Confirm Payment Button */}
         <TouchableOpacity
           className={`rounded-lg py-4 items-center mb-4 ${
-            isProcessing ? 'bg-gray-400' : 'bg-[#0096c7]'
+            isProcessing ? 'bg-gray-400' : 'bg-[#60BB46]'
           }`}
           onPress={handleConfirmPayment}
           disabled={isProcessing}
@@ -330,11 +353,11 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
           {isProcessing ? (
             <View className="flex-row items-center">
               <ActivityIndicator color="#FFFFFF" />
-              <Text className="text-white text-base font-semibold ml-2">Processing Payment...</Text>
+              <Text className="text-white text-base font-semibold ml-2">Initiating Payment...</Text>
             </View>
           ) : (
             <Text className="text-white text-base font-semibold">
-              Confirm Payment - Rs. {booking.priceBreakdown.totalPrice.toFixed(2)}
+              Pay with eSewa - Rs. {booking.priceBreakdown.totalPrice.toFixed(2)}
             </Text>
           )}
         </TouchableOpacity>

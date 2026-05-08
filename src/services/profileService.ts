@@ -271,7 +271,7 @@ class ProfileService {
    * @param error Unknown error object
    * @returns boolean
    */
-  private isAxiosError(error: unknown): error is AxiosError {
+  private isAxiosError(error: unknown): error is AxiosError<any> {
     return error !== null && typeof error === 'object' && 'isAxiosError' in error;
   }
 }

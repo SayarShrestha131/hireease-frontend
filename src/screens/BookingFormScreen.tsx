@@ -541,7 +541,7 @@ export const BookingFormScreen: React.FC<BookingFormScreenProps> = ({
           {/* Vehicle Info */}
           <View className="bg-blue-50 rounded-lg p-4 mb-6">
             <Text className="text-gray-900 font-semibold text-lg mb-1">{vehicle.name}</Text>
-            <Text className="text-gray-600 text-sm">{vehicle.brand} {vehicle.model}</Text>
+            <Text className="text-gray-600 text-sm">{vehicle.brand} {vehicle.vehicleModel}</Text>
             <Text className="text-[#0096c7] font-bold text-lg mt-2">
               Rs. {vehicle.pricePerDay}/day
             </Text>

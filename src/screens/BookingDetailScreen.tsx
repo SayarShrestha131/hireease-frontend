@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -27,8 +28,10 @@ import {
   Phone,
   Mail,
   Package,
+  Download,
 } from 'lucide-react-native';
 import bookingService from '../services/bookingService';
+import paymentService from '../services/paymentService';
 import { Booking, BookingStatus } from '../types/booking';
 import { getCurrentApiUrl } from '../config/api';
 
@@ -45,6 +48,8 @@ export const BookingDetailScreen: React.FC<BookingDetailScreenProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
 
   /**
    * Fetch booking details on mount
@@ -52,6 +57,50 @@ export const BookingDetailScreen: React.FC<BookingDetailScreenProps> = ({
   useEffect(() => {
     fetchBookingDetails();
   }, [bookingId]);
+
+  /**
+   * Fetch receipt if payment is completed
+   */
+  useEffect(() => {
+    // Fetch receipt if payment is completed
+    if (booking && booking.paymentStatus === 'completed') {
+      fetchReceipt();
+    }
+  }, [booking?.paymentStatus]);
+
+  /**
+   * Fetch receipt from API
+   */
+  const fetchReceipt = async () => {
+    if (!booking) return;
+    
+    try {
+      setLoadingReceipt(true);
+      const response = await paymentService.getReceipt(booking._id);
+      setReceiptUrl(response.data.receiptUrl);
+    } catch (error) {
+      console.error('Failed to fetch receipt:', error);
+    } finally {
+      setLoadingReceipt(false);
+    }
+  };
+
+  /**
+   * Handle receipt download
+   */
+  const handleDownloadReceipt = async () => {
+    if (receiptUrl) {
+      try {
+        const supported = await Linking.canOpenURL(receiptUrl);
+        if (supported) {
+          await Linking.openURL(receiptUrl);
+        }
+      } catch (error) {
+        console.error('Failed to open receipt:', error);
+        Alert.alert('Error', 'Failed to open receipt. Please try again.');
+      }
+    }
+  };
 
   /**
    * Fetch booking details from API
@@ -124,14 +173,40 @@ export const BookingDetailScreen: React.FC<BookingDetailScreenProps> = ({
 
     try {
       setIsCancelling(true);
-      const updatedBooking = await bookingService.cancelBooking(booking._id);
-      setBooking(updatedBooking);
       
-      Alert.alert(
-        'Booking Cancelled',
-        'Your booking has been successfully cancelled. A refund will be processed if applicable.',
-        [{ text: 'OK' }]
-      );
+      // Cancel the booking
+      const updatedBooking = await bookingService.cancelBooking(booking._id);
+      
+      // If payment was completed, initiate refund
+      if (booking.paymentStatus === 'completed') {
+        try {
+          await paymentService.requestRefund({
+            bookingId: booking._id,
+            reason: 'User requested cancellation',
+          });
+          
+          Alert.alert(
+            'Booking Cancelled',
+            'Your booking has been successfully cancelled. A refund has been initiated and will be processed within 5-7 business days.',
+            [{ text: 'OK' }]
+          );
+        } catch (refundError) {
+          console.error('Refund initiation failed:', refundError);
+          Alert.alert(
+            'Booking Cancelled',
+            'Your booking has been cancelled, but there was an issue initiating the refund. Please contact support for assistance.',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        Alert.alert(
+          'Booking Cancelled',
+          'Your booking has been successfully cancelled.',
+          [{ text: 'OK' }]
+        );
+      }
+      
+      setBooking(updatedBooking);
     } catch (err: any) {
       console.error('Error cancelling booking:', err);
       Alert.alert(
@@ -712,6 +787,40 @@ export const BookingDetailScreen: React.FC<BookingDetailScreenProps> = ({
               <View className="flex-row justify-between items-center py-2">
                 <Text className="text-gray-600">Transaction ID</Text>
                 <Text className="text-gray-900 text-xs">{booking.paymentId}</Text>
+              </View>
+            )}
+
+            {/* Refund Status */}
+            {booking.paymentStatus === 'refunded' && (
+              <View className="bg-blue-50 rounded-lg p-3 mt-3">
+                <Text className="text-blue-900 font-semibold text-sm mb-1">
+                  Refund Processed
+                </Text>
+                <Text className="text-blue-700 text-xs">
+                  Your refund has been processed and should appear in your account within 5-7 business days.
+                </Text>
+              </View>
+            )}
+
+            {/* Receipt Download */}
+            {booking.paymentStatus === 'completed' && (
+              <View className="mt-3">
+                {loadingReceipt ? (
+                  <View className="bg-gray-100 rounded-lg py-3 items-center">
+                    <ActivityIndicator size="small" color="#0096c7" />
+                    <Text className="text-gray-600 text-xs mt-1">Loading receipt...</Text>
+                  </View>
+                ) : receiptUrl ? (
+                  <TouchableOpacity
+                    className="bg-blue-50 border border-[#0096c7] rounded-lg py-3 items-center flex-row justify-center"
+                    onPress={handleDownloadReceipt}
+                  >
+                    <Download size={18} color="#0096c7" />
+                    <Text className="text-[#0096c7] text-sm font-semibold ml-2">
+                      Download Receipt
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             )}
           </View>

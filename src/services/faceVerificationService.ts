@@ -4,7 +4,7 @@
  */
 
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from '../config/api';
+import { getCurrentApiUrl } from '../config/api';
 
 export interface FaceVerificationResult {
   verified: boolean;
@@ -53,7 +53,7 @@ export const verifyUserFace = async (token: string): Promise<FaceVerificationRes
     } as any);
 
     // Send to backend
-    const response = await fetch(`${API_URL}/face-verification/verify`, {
+    const response = await fetch(`${getCurrentApiUrl()}/face-verification/verify`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -105,7 +105,7 @@ export const compareTwoFaces = async (
       name: 'image2.jpg',
     } as any);
 
-    const response = await fetch(`${API_URL}/face-verification/compare`, {
+    const response = await fetch(`${getCurrentApiUrl()}/face-verification/compare`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

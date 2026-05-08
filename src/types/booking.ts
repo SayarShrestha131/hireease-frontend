@@ -22,8 +22,9 @@ export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 
 /**
  * Payment method options available in the system
+ * Currently supporting eSewa (Nepal's popular digital wallet)
  */
-export type PaymentMethod = 'eSewa' | 'Khalti' | 'Card' | 'Direct';
+export type PaymentMethod = 'esewa';
 
 /**
  * Add-ons interface for optional rental enhancements
@@ -81,6 +82,15 @@ export interface Booking {
   // Cancellation Information
   cancelledAt?: string;        // ISO date string
   cancellationReason?: string;
+  
+  // Pickup/Return Information
+  pickedUpAt?: string;         // ISO date string
+  returnedAt?: string;         // ISO date string
+  
+  // Review Information
+  rating?: number;             // 1-5 star rating
+  review?: string;             // User review text
+  reviewedAt?: string;         // ISO date string
   
   // Timestamps
   createdAt: string;

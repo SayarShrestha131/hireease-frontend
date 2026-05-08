@@ -27,9 +27,7 @@ import {
   X,
   Shield,
   Phone,
-  MapPin,
   Bell,
-  FileText,
   Clock,
   UserPlus,
   Trash2,
@@ -43,28 +41,13 @@ import { getCurrentApiUrl } from '../config/api';
 import { ProfilePictureUpload } from '../components/ProfilePictureUpload';
 import profileService from '../services/profileService';
 
-// Temporary Booking interface until it's properly exported
-interface Booking {
-  _id: string;
-  vehicleName: string;
-  status: string;
-  startDate: string;
-  endDate: string;
-  pickupLocation: string;
-  totalPrice: number;
-  vehicle?: {
-    _id: string;
-    name: string;
-    vehicleModel?: string;
-    images?: string[];
-  };
-}
+
 
 interface ProfileScreenProps {
   onNavigateBack: () => void;
 }
 
-type TabType = 'profile' | 'contact' | 'emergency' | 'preferences' | 'bookings' | 'documents';
+type TabType = 'profile' | 'contact' | 'emergency' | 'preferences';
 
 /**
  * ProfileScreen Component
@@ -103,10 +86,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
   const [promotions, setPromotions] = useState(user?.notificationPreferences?.promotions ?? false);
   const [reminders, setReminders] = useState(user?.notificationPreferences?.reminders ?? true);
 
-  // Bookings
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loadingBookings, setLoadingBookings] = useState(false);
-
   // Emergency contacts
   const [newEmergencyContact, setNewEmergencyContact] = useState({ name: '', relationship: '', phone: '' });
 
@@ -138,15 +117,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
     }
   }, [user]);
 
-  /**
-   * Fetch bookings when bookings tab is active
-   */
-  React.useEffect(() => {
-    if (activeTab === 'bookings' && bookings.length === 0) {
-      fetchBookings();
-    }
-  }, [activeTab]);
-
   const fetchProfileData = async () => {
     try {
       setFetchingProfile(true);
@@ -158,18 +128,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
       }
     } finally {
       setFetchingProfile(false);
-    }
-  };
-
-  const fetchBookings = async () => {
-    try {
-      setLoadingBookings(true);
-      const response = await apiClient.get<{ success: boolean; data: { bookings: Booking[] } }>('/profile/bookings');
-      setBookings(response.data.data.bookings);
-    } catch (err) {
-      console.error('Error fetching bookings:', err);
-    } finally {
-      setLoadingBookings(false);
     }
   };
 
@@ -451,45 +409,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
     });
   };
 
-  const getVehicleImageUrl = (booking: Booking) => {
-    if (booking.vehicle?.images && booking.vehicle.images.length > 0) {
-      const imageValue = booking.vehicle.images[0];
-      
-      // Check if it's already a full URL (http:// or https://)
-      if (imageValue.startsWith('http://') || imageValue.startsWith('https://')) {
-        return imageValue;
-      }
-      
-      // Otherwise, construct URL from API base
-      const baseUrl = getCurrentApiUrl();
-      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
-      return `${cleanBaseUrl}/vehicles/image/${imageValue}?t=${Date.now()}`;
-    }
-    return null;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'bg-green-100';
-      case 'active': return 'bg-blue-100';
-      case 'completed': return 'bg-gray-100';
-      case 'cancelled': return 'bg-red-100';
-      case 'pending': return 'bg-yellow-100';
-      default: return 'bg-yellow-100';
-    }
-  };
-
-  const getStatusTextColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'text-green-700';
-      case 'active': return 'text-blue-700';
-      case 'completed': return 'text-gray-700';
-      case 'cancelled': return 'text-red-700';
-      case 'pending': return 'text-yellow-700';
-      default: return 'text-yellow-700';
-    }
-  };
-
   const renderTabButton = (tab: TabType, icon: any, label: string) => (
     <TouchableOpacity
       onPress={() => {
@@ -513,17 +432,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
   const renderProfileTab = () => (
     <View>
       {/* Update Restriction Notice - DISABLED for testing */}
-      {false && updateRestriction && !updateRestriction.canUpdate && (activeTab === 'profile' || activeTab === 'contact') && (
+      {false && updateRestriction && !updateRestriction?.canUpdate && (activeTab === 'profile' || activeTab === 'contact') && (
         <View className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
           <View className="flex-row items-start">
             <Clock size={20} color="#F59E0B" />
             <View className="flex-1 ml-3">
               <Text className="text-yellow-800 font-semibold mb-1">Profile Update Restriction</Text>
               <Text className="text-yellow-700 text-sm">
-                You can update your profile again in {updateRestriction.daysRemaining} day(s).
+                You can update your profile again in {updateRestriction?.daysRemaining || 0} day(s).
               </Text>
               <Text className="text-yellow-600 text-xs mt-1">
-                Next update: {updateRestriction.nextUpdateDate?.toLocaleDateString()}
+                Next update: {updateRestriction?.nextUpdateDate?.toLocaleDateString() || 'N/A'}
               </Text>
             </View>
           </View>
@@ -820,120 +739,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
     </View>
   );
 
-  const renderBookingsTab = () => (
-    <View>
-      {loadingBookings ? (
-        <View className="py-8">
-          <ActivityIndicator size="large" color="#0096c7" />
-        </View>
-      ) : bookings.length > 0 ? (
-        bookings.map((booking) => {
-          const vehicleImageUrl = getVehicleImageUrl(booking);
-          const vehicleName = booking.vehicle?.name || booking.vehicleName || 'Vehicle';
-          
-          return (
-            <View key={booking._id} className="bg-white rounded-lg overflow-hidden mb-3 shadow-sm">
-              {/* Vehicle Image */}
-              {vehicleImageUrl ? (
-                <Image
-                  source={{
-                    uri: vehicleImageUrl,
-                    headers: {
-                      'Accept': 'image/*',
-                    }
-                  }}
-                  className="w-full h-40"
-                  style={{
-                    width: '100%',
-                    height: 160,
-                    backgroundColor: '#E5E7EB'
-                  }}
-                  resizeMode="cover"
-                  onError={(error) => {
-                    console.error('[ProfileScreen] Booking image load error:', error.nativeEvent.error);
-                  }}
-                />
-              ) : (
-                <View className="w-full h-40 bg-gray-200 items-center justify-center">
-                  <Clock size={48} color="#9CA3AF" />
-                </View>
-              )}
-
-              <View className="p-4">
-                {/* Vehicle Name and Status */}
-                <View className="flex-row justify-between items-start mb-2">
-                  <Text className="text-lg font-bold text-gray-800 flex-1" numberOfLines={1}>
-                    {vehicleName}
-                  </Text>
-                  <View className={`px-3 py-1 rounded-full ml-2 ${getStatusColor(booking.status)}`}>
-                    <Text className={`text-xs font-semibold capitalize ${getStatusTextColor(booking.status)}`}>
-                      {booking.status}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Dates */}
-                <View className="flex-row items-center mb-2">
-                  <Calendar size={14} color="#6B7280" />
-                  <Text className="text-sm text-gray-600 ml-2">
-                    {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
-                  </Text>
-                </View>
-
-                {/* Pickup Location */}
-                <View className="flex-row items-center mb-2">
-                  <MapPin size={14} color="#6B7280" />
-                  <Text className="text-sm text-gray-600 ml-2">
-                    {booking.pickupLocation}
-                  </Text>
-                </View>
-
-                {/* Price */}
-                <Text className="text-base font-semibold text-[#0096c7] mt-2">
-                  Rs. {booking.totalPrice.toLocaleString()}
-                </Text>
-              </View>
-            </View>
-          );
-        })
-      ) : (
-        <View className="bg-white rounded-lg p-8 items-center">
-          <Clock size={48} color="#9CA3AF" />
-          <Text className="text-gray-500 mt-4 text-center">No bookings yet</Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const renderDocumentsTab = () => (
-    <View>
-      <View className="bg-white rounded-lg p-6 shadow-sm">
-        <Text className="text-lg font-bold text-gray-800 mb-4">Documents</Text>
-        {user?.documents && user.documents.length > 0 ? (
-          user.documents.map((doc, index) => (
-            <View key={index} className="mb-4 p-4 bg-gray-50 rounded-lg flex-row justify-between items-center">
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-gray-800 capitalize">{doc.type}</Text>
-                <Text className="text-sm text-gray-600 mt-1">
-                  Uploaded: {formatDate(doc.uploadedAt)}
-                </Text>
-                <Text className={`text-sm mt-1 ${doc.verified ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {doc.verified ? 'Verified' : 'Pending Verification'}
-                </Text>
-              </View>
-              <FileText size={24} color="#0096c7" />
-            </View>
-          ))
-        ) : (
-          <View className="py-8 items-center">
-            <FileText size={48} color="#9CA3AF" />
-            <Text className="text-gray-500 mt-4 text-center">No documents uploaded</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       {fetchingProfile ? (
@@ -967,8 +772,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
             {renderTabButton('contact', Phone, 'Contact')}
             {renderTabButton('emergency', Shield, 'Emergency')}
             {renderTabButton('preferences', Bell, 'Preferences')}
-            {renderTabButton('bookings', Clock, 'Bookings')}
-            {renderTabButton('documents', FileText, 'Documents')}
           </View>
 
           <ScrollView className="flex-1 px-6 py-6">
@@ -976,8 +779,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigateBack }) 
             {activeTab === 'contact' && renderContactTab()}
             {activeTab === 'emergency' && renderEmergencyTab()}
             {activeTab === 'preferences' && renderPreferencesTab()}
-            {activeTab === 'bookings' && renderBookingsTab()}
-            {activeTab === 'documents' && renderDocumentsTab()}
 
             {/* Error Message */}
             {error && (

@@ -211,7 +211,7 @@ export const VerifyCodeScreen: React.FC<VerifyCodeScreenProps> = ({
               {code.map((digit, index) => (
                 <TextInput
                   key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
+                  ref={(ref) => { inputRefs.current[index] = ref; }}
                   className={`w-12 h-14 mx-1 text-center text-2xl font-bold border rounded-lg ${
                     error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-gray-50'
                   } ${digit ? 'text-gray-900' : 'text-gray-400'}`}
